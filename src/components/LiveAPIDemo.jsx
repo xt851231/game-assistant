@@ -28,6 +28,12 @@ const LiveAPIDemo = forwardRef((props, ref) => {
   const [projectId, setProjectId] = useState(
     localStorage.getItem("projectId") || ""
   );
+  const [apiKey, setApiKey] = useState(
+    localStorage.getItem("apiKey") || ""
+  );
+  const [directConnection, setDirectConnection] = useState(
+    localStorage.getItem("directConnection") === "true"
+  );
   const [model, setModel] = useState(
     localStorage.getItem("model") ||
     "gemini-live-2.5-flash-native-audio"
@@ -36,8 +42,10 @@ const LiveAPIDemo = forwardRef((props, ref) => {
   useEffect(() => {
     localStorage.setItem("proxyUrl", proxyUrl);
     localStorage.setItem("projectId", projectId);
+    localStorage.setItem("apiKey", apiKey);
+    localStorage.setItem("directConnection", directConnection);
     localStorage.setItem("model", model);
-  }, [proxyUrl, projectId, model]);
+  }, [proxyUrl, projectId, apiKey, directConnection, model]);
   const [systemInstructions, setSystemInstructions] = useState(
     `You are an energetic gaming assistant.
 Be concise and friendly.
@@ -254,41 +262,22 @@ Respond helpfully to all user messages.`
   }, []);
 
   const connect = async () => {
-    if (!proxyUrl && !projectId) {
-      alert("Please provide either a Proxy URL and Project ID");
+    if (directConnection && !apiKey) {
+      alert("Please provide an API Key for direct connection");
+      return;
+    }
+    if (!directConnection && !proxyUrl) {
+      alert("Please provide a Proxy URL or enable Direct Connection");
       return;
     }
 
     try {
       clientRef.current = new GeminiLiveAPI(proxyUrl, projectId, model);
+      clientRef.current.apiKey = apiKey;
 
-      clientRef.current.systemInstructions = systemInstructions;
-      clientRef.current.inputAudioTranscription = enableInputTranscription;
-      clientRef.current.outputAudioTranscription = enableOutputTranscription;
-      clientRef.current.googleGrounding = enableGrounding;
-      clientRef.current.enableAffectiveDialog = enableAffectiveDialog;
-      clientRef.current.responseModalities = ["AUDIO"];
-      clientRef.current.voiceName = voice;
-      clientRef.current.temperature = parseFloat(temperature);
-      clientRef.current.proactivity = {
-        proactiveAudio: enableProactiveAudio,
-      };
-      clientRef.current.automaticActivityDetection = {
-        disabled: disableActivityDetection,
-        silence_duration_ms: parseInt(silenceDuration),
-        prefix_padding_ms: parseInt(prefixPadding),
-        end_of_speech_sensitivity: endSpeechSensitivity,
-        start_of_speech_sensitivity: startSpeechSensitivity,
-      };
-
-      if (!enableGrounding) {
-        if (enableAlertTool) {
-          clientRef.current.addFunction(new ShowAlertTool());
-        }
-        if (enableCssStyleTool) {
-          clientRef.current.addFunction(new AddCSSStyleTool());
-        }
-      }
+      // Set config
+      clientRef.current.setSystemInstructions(systemInstructions);
+      clientRef.current.setVoice(voice);
 
       clientRef.current.onReceiveResponse = handleMessage;
       clientRef.current.onErrorMessage = (error) => {
@@ -297,6 +286,7 @@ Respond helpfully to all user messages.`
       };
       clientRef.current.onConnectionStarted = () => {
         setConnected(true);
+        setDebugInfo("Connected via Gemini SDK");
       };
       clientRef.current.onClose = () => {
         setConnected(false);
@@ -311,8 +301,6 @@ Respond helpfully to all user messages.`
       audioPlayerRef.current = new AudioPlayer();
       await audioPlayerRef.current.init();
       audioPlayerRef.current.setVolume(volume / 100);
-
-      setDebugInfo("Connected successfully");
     } catch (error) {
       console.error("Connection failed:", error);
       setDebugInfo("Error: " + error.message);
@@ -498,6 +486,25 @@ Respond helpfully to all user messages.`
                     onChange={(e) => setProjectId(e.target.value)}
                     disabled={connected}
                   />
+                </div>
+                <div className="input-group">
+                  <label>API Key {directConnection ? "(Required)" : "(Optional)"}:</label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    disabled={connected}
+                    placeholder="Enter API Key"
+                  />
+                </div>
+                <div className="checkbox-group">
+                  <input
+                    type="checkbox"
+                    checked={directConnection}
+                    onChange={(e) => setDirectConnection(e.target.checked)}
+                    disabled={connected}
+                  />
+                  <label>Direct Connection (bypass proxy)</label>
                 </div>
                 <div className="input-group">
                   <label>Model ID:</label>

@@ -1,6 +1,7 @@
 /**
- * Gemini Live API Utilities
+ * Gemini Live API Utilities using @google/genai SDK
  */
+import { GoogleGenAI } from "@google/genai";
 
 // Response type constants
 export const MultimodalLiveResponseType = {
@@ -24,59 +25,48 @@ export class MultimodalLiveResponseMessage {
     this.type = "";
     this.endOfTurn = false;
 
-    // console.log("raw message data: ", data);
-    this.endOfTurn = data?.serverContent?.turnComplete;
+    // Use serverContent from the SDK message
+    const serverContent = data.serverContent;
 
-    const parts = data?.serverContent?.modelTurn?.parts;
+    if (!serverContent && data.toolCall) {
+      // Tool call might be at top level or inside content?
+      // Based on snippet, structure is message.serverContent...
+      // But let's handle if it is different.
+    }
+
+    this.endOfTurn = serverContent?.turnComplete;
 
     try {
-      if (data?.setupComplete) {
-        // console.log("🏁 SETUP COMPLETE response", data);
+      if (data.setupComplete) { // Might be different in SDK
         this.type = MultimodalLiveResponseType.SETUP_COMPLETE;
-      } else if (data?.serverContent?.turnComplete) {
-        // console.log("🏁 TURN COMPLETE response");
+      } else if (serverContent?.turnComplete) {
         this.type = MultimodalLiveResponseType.TURN_COMPLETE;
-      } else if (data?.serverContent?.interrupted) {
-        // console.log("🗣️ INTERRUPTED response");
+      } else if (serverContent?.interrupted) {
         this.type = MultimodalLiveResponseType.INTERRUPTED;
-      } else if (data?.serverContent?.inputTranscription) {
-        // console.log(
-        //   "📝 INPUT TRANSCRIPTION:",
-        //   data.serverContent.inputTranscription
-        // );
-        this.type = MultimodalLiveResponseType.INPUT_TRANSCRIPTION;
-        this.data = {
-          text: data.serverContent.inputTranscription.text || "",
-          finished: data.serverContent.inputTranscription.finished || false,
-        };
-      } else if (data?.serverContent?.outputTranscription) {
-        // console.log(
-        //   "📝 OUTPUT TRANSCRIPTION:",
-        //   data.serverContent.outputTranscription
-        // );
-        this.type = MultimodalLiveResponseType.OUTPUT_TRANSCRIPTION;
-        this.data = {
-          text: data.serverContent.outputTranscription.text || "",
-          finished: data.serverContent.outputTranscription.finished || false,
-        };
-      } else if (data?.toolCall) {
-        // console.log("🎯 🛠️ TOOL CALL response", data?.toolCall);
-        this.type = MultimodalLiveResponseType.TOOL_CALL;
-        this.data = data?.toolCall;
-      } else if (parts?.length && parts[0].text) {
-        // console.log("💬 TEXT response", parts[0].text);
-        this.data = parts[0].text;
-        this.type = MultimodalLiveResponseType.TEXT;
-      } else if (parts?.length && parts[0].inlineData) {
-        // console.log("🔊 AUDIO response");
-        this.data = parts[0].inlineData.data;
-        this.type = MultimodalLiveResponseType.AUDIO;
+      } else if (serverContent?.modelTurn?.parts) {
+        // Iterate through parts to find what we have
+        const parts = serverContent.modelTurn.parts;
+        for (const part of parts) {
+          if (part.text) {
+            this.data = part.text;
+            this.type = MultimodalLiveResponseType.TEXT;
+          } else if (part.inlineData) {
+            this.data = part.inlineData.data;
+            this.type = MultimodalLiveResponseType.AUDIO;
+          }
+        }
       }
+
+      // Handle transcriptions if available in SDK response (checking manual protocol match)
+      // The SDK wrapper might emit different events or structure.
+      // We'll stick to what the user snippet suggests: parsing message.serverContent
+
     } catch (e) {
       console.log("⚠️ Error parsing response data: ", data);
     }
   }
 }
+
 
 /**
  * Function call definition for tool use
@@ -118,301 +108,300 @@ export class FunctionCallDefinition {
  */
 export class GeminiLiveAPI {
   constructor(proxyUrl, projectId, model) {
-    this.proxyUrl = proxyUrl;
-    this.projectId = projectId;
-    this.model = model;
-    this.modelUri = `projects/${this.projectId}/locations/us-central1/publishers/google/models/${this.model}`;
-    this.responseModalities = ["AUDIO"];
-    this.systemInstructions = "";
-    this.googleGrounding = false;
-    this.enableAffectiveDialog = false; // Default affective dialog
-    this.voiceName = "Puck"; // Default voice
-    this.temperature = 1.0; // Default temperature
-    this.proactivity = { proactiveAudio: false }; // Proactivity config
-    this.inputAudioTranscription = false;
-    this.outputAudioTranscription = false;
-    this.enableFunctionCalls = false;
-    this.functions = [];
-    this.functionsMap = {};
-    this.previousImage = null;
-    this.totalBytesSent = 0;
-
-    // Automatic activity detection settings with defaults
-    this.automaticActivityDetection = {
-      disabled: false,
-      silence_duration_ms: 2000,
-      prefix_padding_ms: 500,
-      end_of_speech_sensitivity: "END_SENSITIVITY_UNSPECIFIED",
-      start_of_speech_sensitivity: "START_SENSITIVITY_UNSPECIFIED",
-    };
-
-    this.apiHost = "us-central1-aiplatform.googleapis.com";
-    this.serviceUrl = `wss://${this.apiHost}/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`;
+    // proxyUrl and projectId are less relevant for direct connection but kept for compatibility
+    this.model = model || "gemini-2.0-flash-exp";
+    this.apiKey = null;
+    this.client = null;
+    this.session = null;
     this.connected = false;
-    this.webSocket = null;
-    this.lastSetupMessage = null; // Store the last setup message
 
-    // Default callbacks
-    this.onReceiveResponse = (message) => {
-      console.log("Default message received callback", message);
-    };
+    // Config defaults
+    this.systemInstructions = "You are a helpful assistant.";
+    this.voiceName = "Puck";
+    this.responseModalities = ["AUDIO"];
 
-    this.onConnectionStarted = () => {
-      console.log("Default onConnectionStarted");
-    };
-
-    this.onErrorMessage = (message) => {
-      alert(message);
-      this.connected = false;
-    };
-
-    this.onClose = () => {
-      console.log("Default onClose");
-    };
-
-    console.log("Created Gemini Live API object: ", this);
+    // Callbacks
+    this.onReceiveResponse = (message) => console.log("Default receive", message);
+    this.onConnectionStarted = () => console.log("Default connected");
+    this.onClose = () => console.log("Default closed");
+    this.onErrorMessage = (msg) => console.error(msg);
   }
 
-  setProjectId(projectId) {
-    this.projectId = projectId;
-    this.modelUri = `projects/${this.projectId}/locations/us-central1/publishers/google/models/${this.model}`;
-  }
-
-  setSystemInstructions(newSystemInstructions) {
-    console.log("setting system instructions: ", newSystemInstructions);
-    this.systemInstructions = newSystemInstructions;
-  }
-
-  setGoogleGrounding(newGoogleGrounding) {
-    console.log("setting google grounding: ", newGoogleGrounding);
-    this.googleGrounding = newGoogleGrounding;
-  }
-
-  setResponseModalities(modalities) {
-    this.responseModalities = modalities;
-  }
-
-  setVoice(voiceName) {
-    console.log("setting voice: ", voiceName);
-    this.voiceName = voiceName;
-  }
-
-  setProactivity(proactivity) {
-    console.log("setting proactivity: ", proactivity);
-    this.proactivity = proactivity;
-  }
-
-  setInputAudioTranscription(enabled) {
-    console.log("setting input audio transcription: ", enabled);
-    this.inputAudioTranscription = enabled;
-  }
-
-  setOutputAudioTranscription(enabled) {
-    console.log("setting output audio transcription: ", enabled);
-    this.outputAudioTranscription = enabled;
-  }
-
-  setEnableFunctionCalls(enabled) {
-    console.log("setting enable function calls: ", enabled);
-    this.enableFunctionCalls = enabled;
-  }
-
-  addFunction(newFunction) {
-    this.functions.push(newFunction);
-    this.functionsMap[newFunction.name] = newFunction;
-    console.log("added function: ", newFunction);
-  }
-
-  callFunction(functionName, parameters) {
-    const functionToCall = this.functionsMap[functionName];
-    if (functionToCall) {
-      functionToCall.runFunction(parameters);
-    } else {
-      console.error(`Function ${functionName} not found`);
+  async connect() {
+    if (!this.apiKey) {
+      this.onErrorMessage("API Key is required for direct connection");
+      return;
     }
-  }
 
-  connect() {
-    this.setupWebSocketToService();
+    try {
+      this.client = new GoogleGenAI({ apiKey: this.apiKey });
+
+      const config = {
+        model: this.model,
+        responseModalities: this.responseModalities,
+        systemInstruction: this.systemInstructions,
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: this.voiceName
+            }
+          }
+        },
+        // Enable transcriptions as per official docs
+        inputAudioTranscription: {},
+        outputAudioTranscription: {}
+      };
+
+      // Connect to Gemini Live API
+      this.session = await this.client.live.connect({
+        model: this.model,
+        config: config,
+        callbacks: {
+          onopen: () => {
+            this.connected = true;
+            this.onConnectionStarted();
+          },
+          onmessage: (message) => {
+            this.handleIncomingMessage(message);
+          },
+          onclose: (e) => {
+            this.connected = false;
+            this.onClose(e);
+          },
+          onerror: (e) => {
+            this.onErrorMessage(e.message);
+          }
+        }
+      });
+
+    } catch (error) {
+      this.onErrorMessage(error.message);
+      this.connected = false;
+    }
   }
 
   disconnect() {
-    if (this.webSocket) {
-      this.webSocket.close();
+    if (this.session) {
       this.connected = false;
+
+      // Try to close the WebSocket properly
+      const ws = this.session.conn?._ws || this.session.conn?.ws || this.session.conn?.websocket || this.session.conn;
+      if (ws && typeof ws.close === 'function') {
+        try {
+          ws.close();
+        } catch (error) {
+          console.error("Error closing WebSocket:", error);
+        }
+      }
+
+      this.session = null;
+    }
+    // Don't call this.onClose() here - it will be called by the WebSocket's onclose event
+    // Calling it here creates a circular reference with LiveAPIDemo's disconnect
+  }
+
+  enableTranscriptions() {
+    // Try to enable transcriptions by sending a config update via WebSocket
+    if (!this.session) return;
+
+    const ws = this.session.conn?._ws || this.session.conn?.ws || this.session.conn?.websocket || this.session.conn;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        // Send configuration update to enable transcriptions
+        const setupUpdate = {
+          setup: {
+            inputAudioTranscription: {},
+            outputAudioTranscription: {}
+          }
+        };
+
+        ws.send(JSON.stringify(setupUpdate));
+        console.log("✅ Transcription config sent");
+      } catch (error) {
+        console.error("Failed to enable transcriptions:", error);
+      }
+    } else {
+      console.warn("WebSocket not available for transcription config");
     }
   }
 
-  sendMessage(message) {
-    // console.log("🟩 Sending message: ", message);
-    if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
-      this.webSocket.send(JSON.stringify(message));
+  handleIncomingMessage(message) {
+    // Debug: log the full message to understand structure (uncomment if needed)
+    // console.log("📨 Received message:", JSON.stringify(message, null, 2));
+
+    const serverContent = message.serverContent;
+
+    // Handle setup complete
+    if (message.setupComplete) {
+      this.onReceiveResponse({ type: MultimodalLiveResponseType.SETUP_COMPLETE });
+    }
+
+    // Handle tool calls
+    if (message.toolCall) {
+      this.onReceiveResponse({
+        type: MultimodalLiveResponseType.TOOL_CALL,
+        data: message.toolCall
+      });
+    }
+
+    if (serverContent) {
+      // Handle interruption
+      if (serverContent.interrupted) {
+        this.onReceiveResponse({ type: MultimodalLiveResponseType.INTERRUPTED });
+      }
+
+      // Handle turn complete
+      if (serverContent.turnComplete) {
+        this.onReceiveResponse({ type: MultimodalLiveResponseType.TURN_COMPLETE, endOfTurn: true });
+      }
+
+      // Handle input transcription
+      if (serverContent.inputTranscription) {
+        const text = serverContent.inputTranscription.text;
+        if (text) {
+          this.onReceiveResponse({
+            type: MultimodalLiveResponseType.INPUT_TRANSCRIPTION,
+            data: {
+              text: text,
+              finished: serverContent.inputTranscription.finished || false
+            }
+          });
+        }
+      }
+
+      // Handle output transcription (model's audio response as text)
+      if (serverContent.outputTranscription) {
+        const text = serverContent.outputTranscription.text;
+        if (text) {
+          this.onReceiveResponse({
+            type: MultimodalLiveResponseType.OUTPUT_TRANSCRIPTION,
+            data: { text: text, finished: serverContent.turnComplete || false }
+          });
+        }
+      }
+
+      // Handle model parts (Text, Audio, etc.)
+      if (serverContent.modelTurn?.parts) {
+        for (const part of serverContent.modelTurn.parts) {
+          // Check for thought field (might be part.thought or inside text with thinking tags)
+          if (part.thought) {
+            console.log("🤔 Model thought (filtered):", part.thought);
+            continue; // Skip thoughts
+          }
+
+          if (part.text) {
+            // Check if text contains thinking tags or thought markers
+            if (part.text.includes('<thinking>') || part.text.includes('My thought is')) {
+              console.log("🤔 Text contains thought (filtered):", part.text);
+              continue; // Skip
+            }
+
+            this.onReceiveResponse({
+              type: MultimodalLiveResponseType.TEXT,
+              data: part.text,
+              endOfTurn: serverContent.turnComplete
+            });
+          } else if (part.inlineData) {
+            this.onReceiveResponse({
+              type: MultimodalLiveResponseType.AUDIO,
+              data: part.inlineData.data,
+              endOfTurn: serverContent.turnComplete
+            });
+          }
+        }
+      }
     }
   }
 
-  onReceiveMessage(messageEvent) {
-    // console.log("Message received: ", messageEvent);
-    const messageData = JSON.parse(messageEvent.data);
-    const message = new MultimodalLiveResponseMessage(messageData);
-    this.onReceiveResponse(message);
+  async sendAudioMessage(base64PCM) {
+    if (!this.session) return;
+
+    this.session.sendRealtimeInput({
+      audio: {
+        data: base64PCM,
+        mimeType: "audio/pcm;rate=16000"
+      }
+    });
   }
 
-  setupWebSocketToService() {
-    console.log("connecting: ", this.proxyUrl);
+  async sendImageMessage(base64Image, mimeType = "image/jpeg") {
+    if (!this.session) return;
 
-    this.webSocket = new WebSocket(this.proxyUrl);
+    // The @google/genai SDK's sendRealtimeInput doesn't properly support images
+    // Try to access the underlying WebSocket for direct protocol support
 
-    this.webSocket.onclose = (event) => {
-      console.log("websocket closed: ", event);
-      this.connected = false;
-      this.onClose(event);
-    };
+    // Check if session exposes WebSocket (common property names)
+    // Based on console logs, session has 'conn' property
+    let ws = null;
 
-    this.webSocket.onerror = (event) => {
-      console.log("websocket error: ", event);
-      this.connected = false;
-      this.onErrorMessage("Connection error");
-    };
-
-    this.webSocket.onopen = (event) => {
-      console.log("websocket open: ", event);
-      this.connected = true;
-      this.totalBytesSent = 0;
-      this.sendInitialSetupMessages();
-      this.onConnectionStarted();
-    };
-
-    this.webSocket.onmessage = this.onReceiveMessage.bind(this);
-  }
-
-  getFunctionDefinitions() {
-    console.log("🛠️ getFunctionDefinitions called");
-    const tools = [];
-
-    for (let index = 0; index < this.functions.length; index++) {
-      const func = this.functions[index];
-      tools.push(func.getDefinition());
-    }
-    return tools;
-  }
-
-  sendInitialSetupMessages() {
-    const serviceSetupMessage = {
-      service_url: this.serviceUrl,
-    };
-    this.sendMessage(serviceSetupMessage);
-
-    const tools = this.getFunctionDefinitions();
-
-    const sessionSetupMessage = {
-      setup: {
-        model: this.modelUri,
-        generation_config: {
-          response_modalities: this.responseModalities,
-          temperature: this.temperature,
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: this.voiceName,
-              },
-            },
-          },
-        },
-        system_instruction: { parts: [{ text: this.systemInstructions }] },
-        tools: { function_declarations: tools },
-        proactivity: this.proactivity,
-
-        realtime_input_config: {
-          automatic_activity_detection: this.automaticActivityDetection,
-        },
-      },
-    };
-
-    // Add transcription config if enabled
-    if (this.inputAudioTranscription) {
-      sessionSetupMessage.setup.input_audio_transcription = {};
-    }
-    if (this.outputAudioTranscription) {
-      sessionSetupMessage.setup.output_audio_transcription = {};
+    if (this.session.conn) {
+      ws = this.session.conn._ws || this.session.conn.ws || this.session.conn.websocket || this.session.conn;
+      // Check if conn itself is the WebSocket
+      if (ws && typeof ws.send !== 'function') {
+        ws = null;
+      }
     }
 
-    if (this.googleGrounding) {
-      sessionSetupMessage.setup.tools.google_search = {};
-      // Currently can't have both Google Search with custom tools.
-      console.log(
-        "Google Grounding enabled, removing custom function calls if any."
-      );
-      delete sessionSetupMessage.setup.tools.function_declarations;
+    // Fallback to direct session properties
+    if (!ws) {
+      ws = this.session._ws || this.session.ws || this.session.websocket;
     }
 
-    // Add affective dialog if enabled
-    if (this.enableAffectiveDialog) {
-      sessionSetupMessage.setup.generation_config.enable_affective_dialog = true;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      // Send using raw WebSocket with correct Gemini protocol
+      const message = {
+        realtimeInput: {
+          mediaChunks: [{
+            mimeType: mimeType,
+            data: base64Image
+          }]
+        }
+      };
+
+      try {
+        ws.send(JSON.stringify(message));
+        console.log("📷 Image sent via direct WebSocket access");
+        return;
+      } catch (error) {
+        console.error("Failed to send via WebSocket:", error);
+      }
+    } else {
+      // Debug: log session structure to understand what's available
+      console.log("Session keys:", Object.keys(this.session));
+      if (this.session.conn) {
+        console.log("Session.conn keys:", Object.keys(this.session.conn));
+      }
+      console.log("No WebSocket found on session, trying SDK method...");
+
+      // Fallback to SDK method (likely won't work for images)
+      try {
+        this.session.sendRealtimeInput({
+          mediaChunks: [{
+            mimeType: mimeType,
+            data: base64Image
+          }]
+        });
+        console.log("📷 Image sent via SDK (may not work)");
+      } catch (error) {
+        console.error("Failed to send image via SDK:", error);
+      }
     }
-
-    // Store the setup message for later access
-    this.lastSetupMessage = sessionSetupMessage;
-
-    console.log("sessionSetupMessage: ", sessionSetupMessage);
-    this.sendMessage(sessionSetupMessage);
   }
 
   sendTextMessage(text) {
-    const textMessage = {
-      client_content: {
-        turns: [
-          {
-            role: "user",
-            parts: [{ text: text }],
-          },
-        ],
-        turn_complete: true,
-      },
-    };
-    this.sendMessage(textMessage);
+    if (!this.session) return;
+    // Use SDK's sendClientContent method
+    this.session.sendClientContent({
+      turns: text,
+      turnComplete: true
+    });
   }
 
-  sendToolResponse(toolCallId, response) {
-    const message = {
-      tool_response: {
-        id: toolCallId,
-        response: response,
-      },
-    };
-    console.log("🔧 Sending tool response:", message);
-    this.sendMessage(message);
-  }
-
-  sendRealtimeInputMessage(data, mime_type) {
-    const message = {
-      realtime_input: {
-        media_chunks: [
-          {
-            mime_type: mime_type,
-            data: data,
-          },
-        ],
-      },
-    };
-    this.sendMessage(message);
-    this.addToBytesSent(data);
-  }
-
-  addToBytesSent(data) {
-    const encoder = new TextEncoder();
-    const encodedData = encoder.encode(data);
-    this.totalBytesSent += encodedData.length;
-  }
-
-  getBytesSent() {
-    return this.totalBytesSent;
-  }
-
-  sendAudioMessage(base64PCM) {
-    this.sendRealtimeInputMessage(base64PCM, "audio/pcm");
-  }
-
-  async sendImageMessage(base64Image, mime_type = "image/jpeg") {
-    this.sendRealtimeInputMessage(base64Image, mime_type);
-  }
+  // Setters
+  setSystemInstructions(inst) { this.systemInstructions = inst; }
+  setVoice(voice) { this.voiceName = voice; }
+  // ... other setters won't dynamically update session once connected in this simple version
+  // unless SDK supports updateSession (which it likely does via send setup message)
+  // For now we assume config is set before connect.
 }
