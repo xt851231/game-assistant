@@ -71,7 +71,7 @@ async def proxy_task(
 
 
 async def create_proxy(
-    client_websocket: WebSocketCommonProtocol, bearer_token: str, service_url: str
+    client_websocket: WebSocketCommonProtocol, bearer_token: str, service_url: str, api_key: str = None
 ) -> None:
     """
     Establishes a WebSocket connection to the Gemini server and creates bidirectional proxy.
@@ -80,11 +80,20 @@ async def create_proxy(
         client_websocket: The WebSocket connection of the client.
         bearer_token: The bearer token for authentication with the server.
         service_url: The url of the service to connect to.
+        api_key: The API key for authentication with the server.
     """
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {bearer_token}",
     }
+    
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+
+    if api_key:
+        if "?" in service_url:
+            service_url = f"{service_url}&key={api_key}"
+        else:
+            service_url = f"{service_url}?key={api_key}"
 
     # Create SSL context with certifi certificates
     ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -165,8 +174,10 @@ async def handle_websocket_client(client_websocket: WebSocketServerProtocol) -> 
         bearer_token = service_setup_message_data.get("bearer_token")
         service_url = service_setup_message_data.get("service_url")
 
-        # If no bearer token provided, generate one using default credentials
-        if not bearer_token:
+        api_key = service_setup_message_data.get("api_key")
+
+        # If no bearer token and no api key provided, generate bearer token using default credentials
+        if not bearer_token and not api_key:
             print("🔑 Generating access token using default credentials...")
             bearer_token = generate_access_token()
             if not bearer_token:
@@ -184,7 +195,7 @@ async def handle_websocket_client(client_websocket: WebSocketServerProtocol) -> 
             )
             return
 
-        await create_proxy(client_websocket, bearer_token, service_url)
+        await create_proxy(client_websocket, bearer_token, service_url, api_key)
 
     except asyncio.TimeoutError:
         print("⏱️ Timeout waiting for the first message from the client")

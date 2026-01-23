@@ -119,6 +119,7 @@ export class GeminiLiveAPI {
     this.systemInstructions = "You are a helpful assistant.";
     this.voiceName = "Puck";
     this.responseModalities = ["AUDIO"];
+    this.tools = null;
 
     // Callbacks
     this.onReceiveResponse = (message) => console.log("Default receive", message);
@@ -149,8 +150,13 @@ export class GeminiLiveAPI {
         },
         // Enable transcriptions as per official docs
         inputAudioTranscription: {},
-        outputAudioTranscription: {}
+        outputAudioTranscription: {},
       };
+
+      // Add tools if configured
+      if (this.tools) {
+        config.tools = this.tools;
+      }
 
       // Connect to Gemini Live API
       this.session = await this.client.live.connect({
@@ -239,6 +245,7 @@ export class GeminiLiveAPI {
 
     // Handle tool calls
     if (message.toolCall) {
+      console.log("🛠️ [DEBUG] Tool Call received:", message.toolCall);
       this.onReceiveResponse({
         type: MultimodalLiveResponseType.TOOL_CALL,
         data: message.toolCall
@@ -246,6 +253,10 @@ export class GeminiLiveAPI {
     }
 
     if (serverContent) {
+      if (serverContent.groundingMetadata) {
+        console.log("🌍 [DEBUG] Grounding Metadata:", serverContent.groundingMetadata);
+      }
+
       // Handle interruption
       if (serverContent.interrupted) {
         this.onReceiveResponse({ type: MultimodalLiveResponseType.INTERRUPTED });
@@ -389,11 +400,29 @@ export class GeminiLiveAPI {
     }
   }
 
-  sendTextMessage(text) {
+  sendTextMessage(text, imageBase64 = null) {
     if (!this.session) return;
-    // Use SDK's sendClientContent method
+
+    // Construct parts
+    const parts = [{ text: text }];
+
+    // Add image if provided
+    if (imageBase64) {
+      // Prepend image to give context before text
+      parts.unshift({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: imageBase64
+        }
+      });
+    }
+
+    // Use SDK's sendClientContent method with explicit content structure
     this.session.sendClientContent({
-      turns: text,
+      turns: [{
+        role: "user",
+        parts: parts
+      }],
       turnComplete: true
     });
   }
@@ -401,6 +430,7 @@ export class GeminiLiveAPI {
   // Setters
   setSystemInstructions(inst) { this.systemInstructions = inst; }
   setVoice(voice) { this.voiceName = voice; }
+  setTools(tools) { this.tools = tools; }
   // ... other setters won't dynamically update session once connected in this simple version
   // unless SDK supports updateSession (which it likely does via send setup message)
   // For now we assume config is set before connect.

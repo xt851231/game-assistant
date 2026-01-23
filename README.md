@@ -30,15 +30,15 @@ This application simulates a gaming companion that watches your gameplay and lis
 The Python backend handles authentication with Google Cloud.
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# # Install dependencies
+# pip install -r requirements.txt
 
-# Authenticate with Google Cloud
-gcloud auth application-default login
+# # Authenticate with Google Cloud      note: not needed for direct connection
+# gcloud auth application-default login
 
-# Start the proxy server
-python server.py
-```
+# # Start the proxy server
+# python server.py
+# ```
 
 ### 2. Frontend Setup
 
@@ -57,8 +57,8 @@ npm run dev
 Open [http://localhost:5173](http://localhost:5173) to view the app.
 
 ## Configuration
-
-1.  **Project ID**: Enter your Google Cloud Project ID in the "Configuration" dropdown.
+<!-- 
+1.  **Project ID**: Enter your Google Cloud Project ID in the "Configuration" dropdown.   now use API key from gemini ai studio api-->
 2.  **Proxy URL**: Defaults to `ws://localhost:8080`.
 3.  **Persona**: Select a persona (Wizard, Robot, Commander) to start the session with a specific voice and style.
 

@@ -62,6 +62,8 @@ Respond helpfully to all user messages.`
     useState(true);
   const [enableOutputTranscription, setEnableOutputTranscription] =
     useState(true);
+  const [optimizeTokenUsage, setOptimizeTokenUsage] = useState(true);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
   // Activity Detection State
   const [disableActivityDetection, setDisableActivityDetection] =
@@ -279,6 +281,14 @@ Respond helpfully to all user messages.`
       clientRef.current.setSystemInstructions(systemInstructions);
       clientRef.current.setVoice(voice);
 
+      // Setup Tools
+      const tools = [];
+      if (enableGrounding) {
+        tools.push({ googleSearch: {} });
+      }
+
+      clientRef.current.setTools(tools);
+
       clientRef.current.onReceiveResponse = handleMessage;
       clientRef.current.onErrorMessage = (error) => {
         console.error("Error:", error);
@@ -315,6 +325,17 @@ Respond helpfully to all user messages.`
         }
 
         if (audioStreamerRef.current) {
+          // Configure VAD and callbacks
+          audioStreamerRef.current.vadEnabled = optimizeTokenUsage;
+          audioStreamerRef.current.onSpeechStatusChange = (isSpeaking) => {
+            setIsUserSpeaking(isSpeaking);
+            // Control video transmission based on speech
+            if (optimizeTokenUsage) {
+              if (videoStreamerRef.current) videoStreamerRef.current.transmitFrames = isSpeaking;
+              if (screenCaptureRef.current) screenCaptureRef.current.transmitFrames = isSpeaking;
+            }
+          };
+
           await audioStreamerRef.current.start(selectedMic);
           setAudioStreaming(true);
           addMessage("[Microphone on]", "system");
@@ -343,6 +364,12 @@ Respond helpfully to all user messages.`
             deviceId: selectedCamera,
           });
           setVideoStreaming(true);
+
+          // Configure Video Optimization
+          if (videoStreamerRef.current) {
+            videoStreamerRef.current.alwaysTransmit = !optimizeTokenUsage;
+          }
+
           if (videoPreviewRef.current) {
             videoPreviewRef.current.srcObject = video.srcObject;
             videoPreviewRef.current.hidden = false;
@@ -377,6 +404,12 @@ Respond helpfully to all user messages.`
         if (screenCaptureRef.current) {
           const video = await screenCaptureRef.current.start();
           setScreenSharing(true);
+
+          // Configure Screen Optimization
+          if (screenCaptureRef.current) {
+            screenCaptureRef.current.alwaysTransmit = !optimizeTokenUsage;
+          }
+
           if (videoPreviewRef.current) {
             videoPreviewRef.current.srcObject = video.srcObject;
             videoPreviewRef.current.hidden = false;
@@ -406,7 +439,28 @@ Respond helpfully to all user messages.`
 
     if (clientRef.current) {
       addMessage(chatInput, "user");
-      clientRef.current.sendTextMessage(chatInput);
+
+      let base64Image = null;
+
+      // If optimizing token usage, send a snapshot frame before the text
+      if (optimizeTokenUsage) {
+        let snapshot = null;
+        if (videoStreaming && videoStreamerRef.current) {
+          try {
+            snapshot = videoStreamerRef.current.takeSnapshot();
+          } catch (e) { console.error("Snapshot failed", e); }
+        } else if (screenSharing && screenCaptureRef.current) {
+          try {
+            snapshot = screenCaptureRef.current.takeSnapshot();
+          } catch (e) { console.error("Snapshot failed", e); }
+        }
+
+        if (snapshot) {
+          base64Image = snapshot.split(",")[1];
+        }
+      }
+
+      clientRef.current.sendTextMessage(chatInput, base64Image);
       setChatInput("");
     } else {
       addMessage("[Connect to Gemini first]", "system");
@@ -580,6 +634,15 @@ Respond helpfully to all user messages.`
                     disabled={connected}
                   />
                   <label>Enable affective dialog</label>
+                </div>
+                <div className="checkbox-group">
+                  <input
+                    type="checkbox"
+                    checked={optimizeTokenUsage}
+                    onChange={(e) => setOptimizeTokenUsage(e.target.checked)}
+                    disabled={connected}
+                  />
+                  <label>Optimize Token Usage (VAD)</label>
                 </div>
               </div>
 

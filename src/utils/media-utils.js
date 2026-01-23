@@ -13,6 +13,14 @@ export class AudioStreamer {
     this.mediaStream = null;
     this.isStreaming = false;
     this.sampleRate = 16000; // Gemini requires 16kHz
+
+    // VAD settings
+    this.vadEnabled = true; // Default to true (optimized)
+    this.vadThreshold = 0.01;
+    this.vadSpeechHoldTime = 500; // ms to keep "speaking" after silence
+    this.lastSpeechTime = 0;
+    this.isSpeaking = false;
+    this.onSpeechStatusChange = null;
   }
 
   /**
@@ -42,8 +50,8 @@ export class AudioStreamer {
       // Create audio context at 16kHz
       this.audioContext = new (window.AudioContext ||
         window.webkitAudioContext)({
-        sampleRate: this.sampleRate,
-      });
+          sampleRate: this.sampleRate,
+        });
 
       // Load the audio worklet module
       await this.audioContext.audioWorklet.addModule(
@@ -65,9 +73,53 @@ export class AudioStreamer {
           const pcmData = this.convertToPCM16(inputData);
           const base64Audio = this.arrayBufferToBase64(pcmData);
 
-          // Send to Gemini
-          if (this.client && this.client.connected) {
-            this.client.sendAudioMessage(base64Audio);
+          // VAD Logic
+          if (this.vadEnabled) {
+            // Calculate RMS
+            let sumSquares = 0;
+            for (let i = 0; i < inputData.length; i++) {
+              sumSquares += inputData[i] * inputData[i];
+            }
+            const rms = Math.sqrt(sumSquares / inputData.length);
+
+            const now = Date.now();
+            if (rms > this.vadThreshold) {
+              this.lastSpeechTime = now;
+            }
+
+            const currentlySpeaking = (now - this.lastSpeechTime) < this.vadSpeechHoldTime;
+
+            // Notify status change
+            if (this.isSpeaking !== currentlySpeaking) {
+              this.isSpeaking = currentlySpeaking;
+              if (this.onSpeechStatusChange) {
+                this.onSpeechStatusChange(currentlySpeaking);
+              }
+
+              // If transitioning to silence, send trailing silence to trigger Turn Complete
+              if (!currentlySpeaking && this.client && this.client.connected) {
+                // Send 1 second of silence (approx 25 buffers of 512 samples at 16k? No, buffer size depends on worklet)
+                const silenceBuffer = new ArrayBuffer(inputData.length);
+                new Int16Array(silenceBuffer).fill(0);
+                const base64Silence = this.arrayBufferToBase64(silenceBuffer);
+
+                // Send 20 chunks of silence (approx 1 second if chunks are small)
+                for (let j = 0; j < 20; j++) {
+                  this.client.sendAudioMessage(base64Silence);
+                }
+              }
+            }
+
+            if (currentlySpeaking) {
+              if (this.client && this.client.connected) {
+                this.client.sendAudioMessage(base64Audio);
+              }
+            }
+          } else {
+            // Always send if VAD is disabled
+            if (this.client && this.client.connected) {
+              this.client.sendAudioMessage(base64Audio);
+            }
           }
         }
       };
@@ -151,6 +203,10 @@ class BaseVideoCapture {
     this.captureInterval = null;
     this.fps = 1; // Default 1 frame per second
     this.quality = 0.8; // Default JPEG quality
+
+    // Optimization flags
+    this.transmitFrames = false; // Controlled by speech status
+    this.alwaysTransmit = false; // Controlled by Config Toggle
   }
 
   /**
@@ -206,7 +262,10 @@ class BaseVideoCapture {
           reader.onloadend = () => {
             const base64 = reader.result.split(",")[1];
             if (this.client && this.client.connected) {
-              this.client.sendImageMessage(base64, "image/jpeg");
+              // Only send if always transmitting OR specific transmit trigger (e.g. speech) is active
+              if (this.alwaysTransmit || this.transmitFrames) {
+                this.client.sendImageMessage(base64, "image/jpeg");
+              }
             }
           };
           reader.readAsDataURL(blob);
@@ -406,8 +465,8 @@ export class AudioPlayer {
       // Create audio context at 24kHz to match Gemini
       this.audioContext = new (window.AudioContext ||
         window.webkitAudioContext)({
-        sampleRate: this.sampleRate,
-      });
+          sampleRate: this.sampleRate,
+        });
 
       // Load the audio worklet from external file
       await this.audioContext.audioWorklet.addModule(
