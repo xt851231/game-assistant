@@ -5,6 +5,7 @@ import "./App.css";
 function App() {
   const liveAPIRef = useRef(null);
   const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [audioStreaming, setAudioStreaming] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
@@ -80,6 +81,7 @@ function App() {
       <LiveAPIDemo
         ref={liveAPIRef}
         onConnectionChange={setConnected}
+        onConnectingChange={setConnecting}
         onAudioStreamChange={setAudioStreaming}
         onScreenShareChange={setScreenSharing}
         onPreviewStreamChange={setVideoStream}
@@ -123,9 +125,8 @@ function App() {
               {PERSONAS.map((persona) => (
                 <button
                   key={persona.name}
-                  className={`persona-button ${
-                    selectedPersona?.name === persona.name ? "active" : ""
-                  }`}
+                  className={`persona-button ${selectedPersona?.name === persona.name ? "active" : ""
+                    }`}
                   onClick={() => handlePersonaSelect(persona)}
                 >
                   <span className="persona-emoji">{persona.emoji}</span>
@@ -137,9 +138,10 @@ function App() {
           <div className="control-bar">
             <button
               onClick={handleConnect}
-              className={connected ? "active" : ""}
+              className={connected ? "active" : (connecting ? "connecting" : "")}
+              disabled={connecting}
             >
-              {connected ? "Disconnect" : "Connect"}
+              {connecting ? "Connecting..." : (connected ? "Disconnect" : "Connect")}
             </button>
             <button
               onClick={handleAudio}

@@ -18,8 +18,10 @@ import "./LiveAPIDemo.css";
 const LiveAPIDemo = forwardRef((props, ref) => {
   // Connection State
   const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [debugInfo, setDebugInfo] = useState("Ready to connect...");
   const [setupJson, setSetupJson] = useState(null);
+  const [openDropdown, setOpenDropdown] = useState(null); // 'config', 'media', 'chat'
 
   // Configuration State
   const [proxyUrl, setProxyUrl] = useState(
@@ -172,7 +174,10 @@ Respond helpfully to all user messages.`
         break;
       case MultimodalLiveResponseType.AUDIO:
         if (audioPlayerRef.current) {
+          console.log("🔊 Playing audio chunk, length:", message.data?.length || 0);
           audioPlayerRef.current.play(message.data);
+        } else {
+          console.warn("⚠️ Audio player not initialized, skipping audio");
         }
         break;
       case MultimodalLiveResponseType.INPUT_TRANSCRIPTION:
@@ -225,27 +230,33 @@ Respond helpfully to all user messages.`
   const disconnect = () => {
     if (clientRef.current) {
       clientRef.current.disconnect();
-      clientRef.current = null;
+      // Keep clientRef.current to reuse it
     }
 
     if (audioStreamerRef.current) {
       audioStreamerRef.current.stop();
-      audioStreamerRef.current = null;
+      // Keep streamer instance
     }
     if (videoStreamerRef.current) {
       videoStreamerRef.current.stop();
-      videoStreamerRef.current = null;
     }
     if (screenCaptureRef.current) {
       screenCaptureRef.current.stop();
-      screenCaptureRef.current = null;
     }
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.destroy();
-      audioPlayerRef.current = null;
+
+    // Don't destroy audioPlayer, just let it be idle
+    if (audioPlayerRef.current && audioPlayerRef.current.audioContext) {
+      if (audioPlayerRef.current.audioContext.state !== 'closed') {
+        try {
+          audioPlayerRef.current.audioContext.suspend();
+        } catch (e) {
+          console.warn("Could not suspend audio context:", e);
+        }
+      }
     }
 
     setConnected(false);
+    setConnecting(false);
     setAudioStreaming(false);
     setVideoStreaming(false);
     setScreenSharing(false);
@@ -264,6 +275,8 @@ Respond helpfully to all user messages.`
   }, []);
 
   const connect = async () => {
+    if (connecting || connected) return;
+
     if (directConnection && !apiKey) {
       alert("Please provide an API Key for direct connection");
       return;
@@ -273,9 +286,16 @@ Respond helpfully to all user messages.`
       return;
     }
 
+    setConnecting(true);
+    setDebugInfo("Connecting...");
+
     try {
-      clientRef.current = new GeminiLiveAPI(proxyUrl, projectId, model);
+      // Reuse or create client
+      if (!clientRef.current) {
+        clientRef.current = new GeminiLiveAPI(proxyUrl, projectId, model);
+      }
       clientRef.current.apiKey = apiKey;
+      clientRef.current.model = model;
 
       // Set config
       clientRef.current.setSystemInstructions(systemInstructions);
@@ -293,27 +313,47 @@ Respond helpfully to all user messages.`
       clientRef.current.onErrorMessage = (error) => {
         console.error("Error:", error);
         setDebugInfo("Error: " + error);
+        setConnecting(false);
       };
       clientRef.current.onConnectionStarted = () => {
         setConnected(true);
+        setConnecting(false);
         setDebugInfo("Connected via Gemini SDK");
       };
       clientRef.current.onClose = () => {
         setConnected(false);
+        setConnecting(false);
         disconnect();
       };
 
-      await clientRef.current.connect();
+      const success = await clientRef.current.connect();
 
-      audioStreamerRef.current = new AudioStreamer(clientRef.current);
-      videoStreamerRef.current = new VideoStreamer(clientRef.current);
-      screenCaptureRef.current = new ScreenCapture(clientRef.current);
-      audioPlayerRef.current = new AudioPlayer();
-      await audioPlayerRef.current.init();
-      audioPlayerRef.current.setVolume(volume / 100);
+      if (success) {
+        // Initialize streamers only once per successful connection
+        if (!audioStreamerRef.current) audioStreamerRef.current = new AudioStreamer(clientRef.current);
+        if (!videoStreamerRef.current) videoStreamerRef.current = new VideoStreamer(clientRef.current);
+        if (!screenCaptureRef.current) screenCaptureRef.current = new ScreenCapture(clientRef.current);
+
+        // Ensure AudioPlayer is initialized and resumed
+        if (!audioPlayerRef.current) {
+          audioPlayerRef.current = new AudioPlayer();
+        }
+        await audioPlayerRef.current.init();
+
+        // Resume audio context if it was suspended
+        if (audioPlayerRef.current.audioContext && audioPlayerRef.current.audioContext.state === 'suspended') {
+          await audioPlayerRef.current.audioContext.resume();
+          console.log("🔊 Audio context resumed");
+        }
+
+        audioPlayerRef.current.setVolume(volume / 100);
+      } else {
+        setConnecting(false);
+      }
     } catch (error) {
       console.error("Connection failed:", error);
       setDebugInfo("Error: " + error.message);
+      setConnecting(false);
     }
   };
 
@@ -475,6 +515,10 @@ Respond helpfully to all user messages.`
     }
   };
 
+  const toggleDropdown = (name) => {
+    setOpenDropdown(openDropdown === name ? null : name);
+  };
+
   useImperativeHandle(ref, () => ({
     connect,
     disconnect,
@@ -497,6 +541,10 @@ Respond helpfully to all user messages.`
   }));
 
   useEffect(() => {
+    props.onConnectingChange?.(connecting);
+  }, [connecting, props.onConnectingChange]);
+
+  useEffect(() => {
     props.onConnectionChange?.(connected);
   }, [connected, props.onConnectionChange]);
 
@@ -517,8 +565,10 @@ Respond helpfully to all user messages.`
         </div>
         <div className="toolbar-center">
           <div className="dropdown">
-            <button className="dropbtn">Configuration ▾</button>
-            <div className="dropdown-content config-dropdown">
+            <button className="dropbtn" onClick={() => toggleDropdown('config')}>
+              Configuration {openDropdown === 'config' ? '▴' : '▾'}
+            </button>
+            <div className={`dropdown-content config-dropdown ${openDropdown === 'config' ? 'show' : ''}`}>
               {/* API Configuration Section */}
               <div className="control-group">
                 <h3>Connection Settings</h3>
@@ -772,14 +822,17 @@ Respond helpfully to all user messages.`
 
           <button
             onClick={connected ? disconnect : connect}
-            className={connected ? "disconnect" : "active"}
+            className={connected ? "disconnect" : (connecting ? "connecting" : "active")}
+            disabled={connecting}
           >
-            {connected ? "Disconnect" : "Connect"}
+            {connecting ? "Connecting..." : (connected ? "Disconnect" : "Connect")}
           </button>
 
           <div className="dropdown">
-            <button className="dropbtn">Media ▾</button>
-            <div className="dropdown-content media-dropdown">
+            <button className="dropbtn" onClick={() => toggleDropdown('media')}>
+              Media {openDropdown === 'media' ? '▴' : '▾'}
+            </button>
+            <div className={`dropdown-content media-dropdown ${openDropdown === 'media' ? 'show' : ''}`}>
               {/* Media Streaming Section */}
               <div className="control-group">
                 <div className="input-group">
@@ -856,8 +909,10 @@ Respond helpfully to all user messages.`
           </div>
 
           <div className="dropdown">
-            <button className="dropbtn">Chat ▾</button>
-            <div className="dropdown-content chat-dropdown">
+            <button className="dropbtn" onClick={() => toggleDropdown('chat')}>
+              Chat {openDropdown === 'chat' ? '▴' : '▾'}
+            </button>
+            <div className={`dropdown-content chat-dropdown ${openDropdown === 'chat' ? 'show' : ''}`}>
               {/* Chat Section */}
               <div className="chat-container" ref={chatContainerRef}>
                 {chatMessages.length === 0 && (

@@ -115,18 +115,26 @@ body {
   min-width: 350px;
 }
 
-.dropdown:hover .dropdown-content {
+.dropdown-content.show {
   display: block;
 }
 
 .debug-info {
   position: fixed;
-  bottom: 10px;
-  left: 10px;
-  max-width: 300px;
-  opacity: 0.7;
-  font-size: 0.8rem;
-  text-align: left;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 100vw;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-top: 1px solid #dadce0;
+  padding: 5px 20px;
+  z-index: 2000;
+  font-size: 0.75rem;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Existing Component Styles (Adapted) */
@@ -278,11 +286,28 @@ button.disconnect:hover {
 }
 
 .setup-json-display {
-  background-color: #f1f3f4;
-  padding: 10px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  overflow-x: hidden;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.75rem;
+  margin: 0;
+  color: #5f6368;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Connecting State Pulse */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+button.connecting {
+  background-color: #fbbc04 !important;
+  color: white !important;
+  border-color: #fbbc04 !important;
+  animation: pulse 1s infinite ease-in-out;
+  cursor: wait;
 }

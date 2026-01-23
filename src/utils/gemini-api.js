@@ -131,7 +131,7 @@ export class GeminiLiveAPI {
   async connect() {
     if (!this.apiKey) {
       this.onErrorMessage("API Key is required for direct connection");
-      return;
+      return false;
     }
 
     try {
@@ -179,10 +179,12 @@ export class GeminiLiveAPI {
           }
         }
       });
+      return true;
 
     } catch (error) {
       this.onErrorMessage(error.message);
       this.connected = false;
+      return false;
     }
   }
 
@@ -233,8 +235,8 @@ export class GeminiLiveAPI {
   }
 
   handleIncomingMessage(message) {
-    // Debug: log the full message to understand structure (uncomment if needed)
-    // console.log("📨 Received message:", JSON.stringify(message, null, 2));
+    // Debug: log the full message to understand structure
+    console.log("📨 Received message:", JSON.stringify(message, null, 2));
 
     const serverContent = message.serverContent;
 
