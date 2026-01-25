@@ -1,4 +1,37 @@
-import { FunctionCallDefinition } from "./gemini-api";
+/**
+ * Function call definition for tool use
+ */
+export class FunctionCallDefinition {
+  constructor(name, description, parameters, requiredParameters) {
+    this.name = name;
+    this.description = description;
+    this.parameters = parameters;
+    this.requiredParameters = requiredParameters;
+  }
+
+  functionToCall(parameters) {
+    console.log("▶️Default function call");
+  }
+
+  getDefinition() {
+    const definition = {
+      name: this.name,
+      description: this.description,
+      parameters: { required: this.requiredParameters, ...this.parameters },
+    };
+    console.log("created FunctionDefinition: ", definition);
+    return definition;
+  }
+
+  runFunction(parameters) {
+    console.log(
+      `⚡ Running ${this.name} function with parameters: ${JSON.stringify(
+        parameters
+      )}`
+    );
+    this.functionToCall(parameters);
+  }
+}
 
 /**
  * Show Alert Box Tool

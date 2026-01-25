@@ -1,0 +1,15 @@
+# Progress Log - 2026-01-26
+
+## Accomplishments
+- **VAD Optimization**: Increased default silence timeout to 1500ms and connected the UI "Silence duration" setting to the AudioStreamer logic.
+- **TTS Latency Reduction**:
+    - Implemented concurrent fetching and sequential playback queue in `GeminiTTSAdapter`.
+    - Implemented sentence-based streaming in `GeminiFlashAdapter` to start audio playback during LLM generation.
+- **Robustness**:
+    - Added concurrency limiting (max 3) and exponential backoff retries (3x) for TTS API 500 errors.
+    - Updated LLM prompt to forbid emojis and request text-only output to prevent TTS engine failures.
+- **UX Improvements**:
+    - Implemented automatic Model ID switching when changing service providers (Live vs REST).
+
+## Remaining Items
+- Investigate "obvious bugs" mentioned by user for next session.

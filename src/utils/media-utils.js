@@ -16,8 +16,8 @@ export class AudioStreamer {
 
     // VAD settings
     this.vadEnabled = true; // Default to true (optimized)
-    this.vadThreshold = 0.01;
-    this.vadSpeechHoldTime = 500; // ms to keep "speaking" after silence
+    this.vadThreshold = 0.05; // Increased from 0.01 to avoid keyboard noise
+    this.vadSpeechHoldTime = 1500; // ms to keep "speaking" after silence
     this.lastSpeechTime = 0;
     this.isSpeaking = false;
     this.onSpeechStatusChange = null;
@@ -96,29 +96,33 @@ export class AudioStreamer {
                 this.onSpeechStatusChange(currentlySpeaking);
               }
 
-              // If transitioning to silence, send trailing silence to trigger Turn Complete
+              // If transitioning to silence, notify the adapter that speech ended
               if (!currentlySpeaking && this.client && this.client.connected) {
-                // Send 1 second of silence (approx 25 buffers of 512 samples at 16k? No, buffer size depends on worklet)
-                const silenceBuffer = new ArrayBuffer(inputData.length);
-                new Int16Array(silenceBuffer).fill(0);
-                const base64Silence = this.arrayBufferToBase64(silenceBuffer);
+                // Call onSpeechEnd if the adapter supports it (e.g., Flash adapter)
+                if (typeof this.client.onSpeechEnd === 'function') {
+                  this.client.onSpeechEnd();
+                } else {
+                  // For Live API: Send trailing silence to trigger Turn Complete
+                  const silenceBuffer = new ArrayBuffer(inputData.length);
+                  new Int16Array(silenceBuffer).fill(0);
+                  const base64Silence = this.arrayBufferToBase64(silenceBuffer);
 
-                // Send 20 chunks of silence (approx 1 second if chunks are small)
-                for (let j = 0; j < 20; j++) {
-                  this.client.sendAudioMessage(base64Silence);
+                  for (let j = 0; j < 20; j++) {
+                    this.client.sendAudio(base64Silence);
+                  }
                 }
               }
             }
 
             if (currentlySpeaking) {
               if (this.client && this.client.connected) {
-                this.client.sendAudioMessage(base64Audio);
+                this.client.sendAudio(base64Audio);
               }
             }
           } else {
             // Always send if VAD is disabled
             if (this.client && this.client.connected) {
-              this.client.sendAudioMessage(base64Audio);
+              this.client.sendAudio(base64Audio);
             }
           }
         }
@@ -262,9 +266,14 @@ class BaseVideoCapture {
           reader.onloadend = () => {
             const base64 = reader.result.split(",")[1];
             if (this.client && this.client.connected) {
+              // Store the latest image for multimodal requests (audio + image)
+              if (typeof this.client.setLatestImage === 'function') {
+                this.client.setLatestImage(base64);
+              }
+
               // Only send if always transmitting OR specific transmit trigger (e.g. speech) is active
               if (this.alwaysTransmit || this.transmitFrames) {
-                this.client.sendImageMessage(base64, "image/jpeg");
+                this.client.sendImage(base64, "image/jpeg");
               }
             }
           };

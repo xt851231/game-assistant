@@ -5,7 +5,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { GeminiLiveAPI, MultimodalLiveResponseType } from "../utils/gemini-api";
+import { ModelClient } from "../api/ModelClient";
 import {
   AudioStreamer,
   VideoStreamer,
@@ -37,8 +37,10 @@ const LiveAPIDemo = forwardRef((props, ref) => {
     localStorage.getItem("directConnection") === "true"
   );
   const [model, setModel] = useState(
-    localStorage.getItem("model") ||
-    "gemini-live-2.5-flash-native-audio"
+    localStorage.getItem("model") || "gemini-2.0-flash-exp"
+  );
+  const [provider, setProvider] = useState(
+    localStorage.getItem("provider") || "live"
   );
 
   useEffect(() => {
@@ -47,7 +49,8 @@ const LiveAPIDemo = forwardRef((props, ref) => {
     localStorage.setItem("apiKey", apiKey);
     localStorage.setItem("directConnection", directConnection);
     localStorage.setItem("model", model);
-  }, [proxyUrl, projectId, apiKey, directConnection, model]);
+    localStorage.setItem("provider", provider);
+  }, [proxyUrl, projectId, apiKey, directConnection, model, provider]);
   const [systemInstructions, setSystemInstructions] = useState(
     `You are an energetic gaming assistant.
 Be concise and friendly.
@@ -70,7 +73,7 @@ Respond helpfully to all user messages.`
   // Activity Detection State
   const [disableActivityDetection, setDisableActivityDetection] =
     useState(false);
-  const [silenceDuration, setSilenceDuration] = useState(500);
+  const [silenceDuration, setSilenceDuration] = useState(1500);
   const [prefixPadding, setPrefixPadding] = useState(500);
   const [endSpeechSensitivity, setEndSpeechSensitivity] = useState(
     "END_SENSITIVITY_UNSPECIFIED"
@@ -166,21 +169,19 @@ Respond helpfully to all user messages.`
   };
 
   const handleMessage = (message) => {
+    // Normalizing event types from Adapter
     setDebugInfo(`Message: ${message.type}`);
 
     switch (message.type) {
-      case MultimodalLiveResponseType.TEXT:
-        addMessage(message.data, "assistant");
+      case 'text':
+        addMessage(message.data, "assistant", "append", message.endOfTurn);
         break;
-      case MultimodalLiveResponseType.AUDIO:
+      case 'audio':
         if (audioPlayerRef.current) {
-          console.log("🔊 Playing audio chunk, length:", message.data?.length || 0);
           audioPlayerRef.current.play(message.data);
-        } else {
-          console.warn("⚠️ Audio player not initialized, skipping audio");
         }
         break;
-      case MultimodalLiveResponseType.INPUT_TRANSCRIPTION:
+      case 'input_transcription':
         addMessage(
           message.data.text,
           "user-transcript",
@@ -188,7 +189,7 @@ Respond helpfully to all user messages.`
           message.data.finished
         );
         break;
-      case MultimodalLiveResponseType.OUTPUT_TRANSCRIPTION:
+      case 'output_transcription':
         addMessage(
           message.data.text,
           "assistant",
@@ -196,31 +197,22 @@ Respond helpfully to all user messages.`
           message.data.finished
         );
         break;
-      case MultimodalLiveResponseType.SETUP_COMPLETE:
+      case 'setup_complete':
         addMessage("Ready!", "system");
-        if (clientRef.current && clientRef.current.lastSetupMessage) {
-          setSetupJson(clientRef.current.lastSetupMessage);
-        }
         break;
-      case MultimodalLiveResponseType.TOOL_CALL: {
+      case 'tool_call':
         const functionCalls = message.data.functionCalls;
-        functionCalls.forEach((functionCall) => {
-          const { name, args } = functionCall;
-          console.log(
-            `Calling function ${name} with parameters: ${JSON.stringify(args)}`
-          );
-          clientRef.current.callFunction(name, args);
-        });
+        functionCalls.forEach((call) => clientRef.current.callFunction(call.name, call.args));
         break;
-      }
-      case MultimodalLiveResponseType.TURN_COMPLETE:
+      case 'turn_complete':
         setDebugInfo("Turn complete");
         break;
-      case MultimodalLiveResponseType.INTERRUPTED:
+      case 'interrupted':
         addMessage("[Interrupted]", "system");
-        if (audioPlayerRef.current) {
-          audioPlayerRef.current.interrupt();
-        }
+        if (audioPlayerRef.current) audioPlayerRef.current.interrupt();
+        break;
+      case 'error': // Adapter might emit error as content or event
+        addMessage(`[Error: ${message.data}]`, "system");
         break;
       default:
         break;
@@ -291,9 +283,38 @@ Respond helpfully to all user messages.`
 
     try {
       // Reuse or create client
-      if (!clientRef.current) {
-        clientRef.current = new GeminiLiveAPI(proxyUrl, projectId, model);
-      }
+      // Create new adapter instance via Factory
+      // Always recreate on connect to ensure fresh config
+      clientRef.current = ModelClient.createAdapter(provider, {
+        apiKey,
+        modelId: model,
+        voice: voice,
+        systemInstruction: systemInstructions
+      });
+      // Setup listeners (Adapter Pattern uses EventEmitter style)
+      clientRef.current.on('content', handleMessage);
+      clientRef.current.on('open', () => {
+        setConnected(true);
+        setConnecting(false);
+        setDebugInfo(`Connected to ${provider} mode`);
+      });
+      clientRef.current.on('close', () => {
+        // Only update state, don't call disconnect() to avoid recursion
+        setConnected(false);
+        setConnecting(false);
+        // Stop media streamers gracefully
+        if (audioStreamerRef.current) audioStreamerRef.current.stop();
+        if (videoStreamerRef.current) videoStreamerRef.current.stop();
+        if (screenCaptureRef.current) screenCaptureRef.current.stop();
+        setAudioStreaming(false);
+        setVideoStreaming(false);
+        setScreenSharing(false);
+      });
+      clientRef.current.on('error', (err) => {
+        console.error("Adapter Error:", err);
+        setDebugInfo("Error: " + err);
+        setConnecting(false);
+      });
       clientRef.current.apiKey = apiKey;
       clientRef.current.model = model;
 
@@ -309,6 +330,7 @@ Respond helpfully to all user messages.`
 
       clientRef.current.setTools(tools);
 
+      // These callbacks are deprecated but kept for backwards compatibility
       clientRef.current.onReceiveResponse = handleMessage;
       clientRef.current.onErrorMessage = (error) => {
         console.error("Error:", error);
@@ -323,16 +345,23 @@ Respond helpfully to all user messages.`
       clientRef.current.onClose = () => {
         setConnected(false);
         setConnecting(false);
-        disconnect();
       };
 
       const success = await clientRef.current.connect();
 
       if (success) {
-        // Initialize streamers only once per successful connection
-        if (!audioStreamerRef.current) audioStreamerRef.current = new AudioStreamer(clientRef.current);
-        if (!videoStreamerRef.current) videoStreamerRef.current = new VideoStreamer(clientRef.current);
-        if (!screenCaptureRef.current) screenCaptureRef.current = new ScreenCapture(clientRef.current);
+        // Always re-create streamers with the new client reference
+        // This ensures they point to the correct adapter instance
+        if (audioStreamerRef.current) audioStreamerRef.current.stop();
+        audioStreamerRef.current = new AudioStreamer(clientRef.current);
+        audioStreamerRef.current.vadSpeechHoldTime = parseInt(silenceDuration);
+
+
+        if (videoStreamerRef.current) videoStreamerRef.current.stop();
+        videoStreamerRef.current = new VideoStreamer(clientRef.current);
+
+        if (screenCaptureRef.current) screenCaptureRef.current.stop();
+        screenCaptureRef.current = new ScreenCapture(clientRef.current);
 
         // Ensure AudioPlayer is initialized and resumed
         if (!audioPlayerRef.current) {
@@ -367,6 +396,8 @@ Respond helpfully to all user messages.`
         if (audioStreamerRef.current) {
           // Configure VAD and callbacks
           audioStreamerRef.current.vadEnabled = optimizeTokenUsage;
+          audioStreamerRef.current.vadSpeechHoldTime = parseInt(silenceDuration);
+
           audioStreamerRef.current.onSpeechStatusChange = (isSpeaking) => {
             setIsUserSpeaking(isSpeaking);
             // Control video transmission based on speech
@@ -500,7 +531,7 @@ Respond helpfully to all user messages.`
         }
       }
 
-      clientRef.current.sendTextMessage(chatInput, base64Image);
+      clientRef.current.sendText(chatInput, base64Image);
       setChatInput("");
     } else {
       addMessage("[Connect to Gemini first]", "system");
@@ -556,6 +587,24 @@ Respond helpfully to all user messages.`
     props.onScreenShareChange?.(screenSharing);
   }, [screenSharing, props.onScreenShareChange]);
 
+  // Update VAD settings dynamically
+  useEffect(() => {
+    if (audioStreamerRef.current) {
+      audioStreamerRef.current.vadSpeechHoldTime = parseInt(silenceDuration);
+    }
+  }, [silenceDuration]);
+
+
+  const handleProviderChange = (e) => {
+    const newProvider = e.target.value;
+    setProvider(newProvider);
+    if (newProvider === "live") {
+      setModel("gemini-2.5-flash-native-audio-preview-12-2025");
+    } else if (newProvider === "flash") {
+      setModel("gemini-2.5-flash");
+    }
+  };
+
   return (
     <div className="live-api-demo">
       <div className="toolbar">
@@ -600,6 +649,17 @@ Respond helpfully to all user messages.`
                     disabled={connected}
                     placeholder="Enter API Key"
                   />
+                </div>
+                <div className="input-group">
+                  <label>Service Provider:</label>
+                  <select
+                    value={provider}
+                    onChange={handleProviderChange}
+                    disabled={connected}
+                  >
+                    <option value="live">Gemini Live (WebSocket)</option>
+                    <option value="flash">Gemini 2.5 Flash (REST)</option>
+                  </select>
                 </div>
                 <div className="checkbox-group">
                   <input
