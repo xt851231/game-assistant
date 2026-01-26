@@ -1,3 +1,13 @@
+# Progress Log - 2026-01-27
+
+## Accomplishments
+- **Reconnection Fix**: Implemented asynchronous cleanup in `AudioStreamer` and `LiveAPIDemo.jsx` to ensure `AudioContext` is fully closed before reconnection, resolving the "app stopped responding" issue.
+- **Tool Integration**: Fixed the broken tool execution logic and correctly wired up `ShowAlertTool` and `AddCSSStyleTool` to the Gemini API.
+- **Improved Logging**: Made media cleanup idempotent to prevent redundant "stopped" messages in the console.
+
+## Remaining Items
+- Monitor for any further stability issues during long sessions.
+
 # Progress Log - 2026-01-26
 
 ## Accomplishments
