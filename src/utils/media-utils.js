@@ -30,6 +30,8 @@ export class AudioStreamer {
    * @param {string} deviceId - Optional device ID for specific microphone
    */
   async start(deviceId = null) {
+    if (this.isStreaming) return true;
+
     try {
       // Build audio constraints
       const audioConstraints = {
@@ -169,7 +171,8 @@ export class AudioStreamer {
   /**
    * Stop audio streaming
    */
-  stop() {
+  async stop() {
+    if (!this.isStreaming) return;
     this.isStreaming = false;
 
     if (this.audioWorklet) {
@@ -179,7 +182,11 @@ export class AudioStreamer {
     }
 
     if (this.audioContext) {
-      this.audioContext.close();
+      try {
+        await this.audioContext.close();
+      } catch (e) {
+        console.error("Error closing AudioContext:", e);
+      }
       this.audioContext = null;
     }
 
@@ -316,6 +323,7 @@ class BaseVideoCapture {
    * Stop capturing
    */
   stop() {
+    if (!this.isStreaming) return;
     this.isStreaming = false;
 
     if (this.captureInterval) {
@@ -366,6 +374,8 @@ export class VideoStreamer extends BaseVideoCapture {
    * @param {Object} options - { fps: number, width: number, height: number, facingMode: string, quality: number, deviceId: string }
    */
   async start(options = {}) {
+    if (this.isStreaming) return this.video;
+
     try {
       const {
         fps = 1,
@@ -415,7 +425,8 @@ export class VideoStreamer extends BaseVideoCapture {
     }
   }
 
-  stop() {
+  async stop() {
+    if (!this.isStreaming) return;
     super.stop();
     console.log("🛑 Camera streaming stopped");
   }
@@ -430,6 +441,8 @@ export class ScreenCapture extends BaseVideoCapture {
    * @param {Object} options - { fps: number, width: number, height: number, quality: number }
    */
   async start(options = {}) {
+    if (this.isStreaming) return this.video;
+
     try {
       const { fps = 1, width = 1280, height = 720, quality = 0.7 } = options;
 
@@ -469,7 +482,8 @@ export class ScreenCapture extends BaseVideoCapture {
     }
   }
 
-  stop() {
+  async stop() {
+    if (!this.isStreaming) return;
     super.stop();
     console.log("🛑 Screen capture stopped");
   }

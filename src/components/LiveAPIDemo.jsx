@@ -103,6 +103,7 @@ Respond helpfully to all user messages.`
   const audioPlayerRef = useRef(null);
   const videoPreviewRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const activeToolsMapRef = useRef({});
 
   // Initialize Media Devices
   useEffect(() => {
@@ -201,7 +202,14 @@ Respond helpfully to all user messages.`
         break;
       case 'tool_call':
         const functionCalls = message.data.functionCalls;
-        functionCalls.forEach((call) => clientRef.current.callFunction(call.name, call.args));
+        functionCalls.forEach((call) => {
+          const tool = activeToolsMapRef.current[call.name];
+          if (tool) {
+            tool.runFunction(call.args);
+          } else {
+            console.warn(`Unknown tool called: ${call.name}`);
+          }
+        });
         break;
       case 'turn_complete':
         setDebugInfo("Turn complete");
@@ -218,28 +226,29 @@ Respond helpfully to all user messages.`
     }
   };
 
-  const disconnect = () => {
+  const disconnect = async () => {
     if (clientRef.current) {
       clientRef.current.disconnect();
       // Keep clientRef.current to reuse it
     }
 
     if (audioStreamerRef.current) {
-      audioStreamerRef.current.stop();
+      await audioStreamerRef.current.stop();
       // Keep streamer instance
     }
     if (videoStreamerRef.current) {
-      videoStreamerRef.current.stop();
+      await videoStreamerRef.current.stop();
     }
     if (screenCaptureRef.current) {
-      screenCaptureRef.current.stop();
+      await screenCaptureRef.current.stop();
     }
 
     // Don't destroy audioPlayer, just let it be idle
     if (audioPlayerRef.current && audioPlayerRef.current.audioContext) {
       if (audioPlayerRef.current.audioContext.state !== 'closed') {
         try {
-          audioPlayerRef.current.audioContext.suspend();
+          // Suspending rather than closing to allow reuse
+          await audioPlayerRef.current.audioContext.suspend();
         } catch (e) {
           console.warn("Could not suspend audio context:", e);
         }
@@ -303,14 +312,14 @@ Respond helpfully to all user messages.`
         setConnecting(false);
         setDebugInfo(`Connected to ${provider} mode`);
       });
-      clientRef.current.on('close', () => {
+      clientRef.current.on('close', async () => {
         // Only update state, don't call disconnect() to avoid recursion
         setConnected(false);
         setConnecting(false);
         // Stop media streamers gracefully
-        if (audioStreamerRef.current) audioStreamerRef.current.stop();
-        if (videoStreamerRef.current) videoStreamerRef.current.stop();
-        if (screenCaptureRef.current) screenCaptureRef.current.stop();
+        if (audioStreamerRef.current) await audioStreamerRef.current.stop();
+        if (videoStreamerRef.current) await videoStreamerRef.current.stop();
+        if (screenCaptureRef.current) await screenCaptureRef.current.stop();
         setAudioStreaming(false);
         setVideoStreaming(false);
         setScreenSharing(false);
@@ -329,10 +338,29 @@ Respond helpfully to all user messages.`
 
       // Setup Tools
       const tools = [];
+      const functionDecls = [];
+      const activeTools = {};
+
       if (enableGrounding) {
         tools.push({ googleSearch: {} });
       }
 
+      if (enableAlertTool) {
+        const tool = new ShowAlertTool();
+        activeTools[tool.name] = tool;
+        functionDecls.push(tool.getDefinition());
+      }
+      if (enableCssStyleTool) {
+        const tool = new AddCSSStyleTool();
+        activeTools[tool.name] = tool;
+        functionDecls.push(tool.getDefinition());
+      }
+
+      if (functionDecls.length > 0) {
+        tools.push({ functionDeclarations: functionDecls });
+      }
+
+      activeToolsMapRef.current = activeTools;
       clientRef.current.setTools(tools);
 
       // These callbacks are deprecated but kept for backwards compatibility
@@ -422,7 +450,7 @@ Respond helpfully to all user messages.`
         addMessage("[Audio error: " + error.message + "]", "system");
       }
     } else {
-      if (audioStreamerRef.current) audioStreamerRef.current.stop();
+      if (audioStreamerRef.current) await audioStreamerRef.current.stop();
       setAudioStreaming(false);
       addMessage("[Microphone off]", "system");
     }
@@ -459,7 +487,7 @@ Respond helpfully to all user messages.`
         addMessage("[Video error: " + error.message + "]", "system");
       }
     } else {
-      if (videoStreamerRef.current) videoStreamerRef.current.stop();
+      if (videoStreamerRef.current) await videoStreamerRef.current.stop();
       setVideoStreaming(false);
       if (videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = null;
@@ -499,7 +527,7 @@ Respond helpfully to all user messages.`
         addMessage("[Screen share error: " + error.message + "]", "system");
       }
     } else {
-      if (screenCaptureRef.current) screenCaptureRef.current.stop();
+      if (screenCaptureRef.current) await screenCaptureRef.current.stop();
       setScreenSharing(false);
       if (!videoStreaming && videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = null;
