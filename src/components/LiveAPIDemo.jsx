@@ -67,12 +67,11 @@ Respond helpfully to all user messages.`
     useState(true);
   const [enableOutputTranscription, setEnableOutputTranscription] =
     useState(true);
-  const [optimizeTokenUsage, setOptimizeTokenUsage] = useState(true);
+
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
   // Activity Detection State
-  const [disableActivityDetection, setDisableActivityDetection] =
-    useState(false);
+  const [enableVAD, setEnableVAD] = useState(true);
   const [silenceDuration, setSilenceDuration] = useState(1500);
   const [prefixPadding, setPrefixPadding] = useState(500);
   const [endSpeechSensitivity, setEndSpeechSensitivity] = useState(
@@ -289,7 +288,13 @@ Respond helpfully to all user messages.`
         apiKey,
         modelId: model,
         voice: voice,
-        systemInstruction: systemInstructions
+        systemInstruction: systemInstructions,
+        // Activity Detection Settings
+        enableVAD,
+        silenceDuration: parseInt(silenceDuration),
+        prefixPadding: parseInt(prefixPadding),
+        startSpeechSensitivity,
+        endSpeechSensitivity
       });
       // Setup listeners (Adapter Pattern uses EventEmitter style)
       clientRef.current.on('content', handleMessage);
@@ -395,13 +400,13 @@ Respond helpfully to all user messages.`
 
         if (audioStreamerRef.current) {
           // Configure VAD and callbacks
-          audioStreamerRef.current.vadEnabled = optimizeTokenUsage;
+          audioStreamerRef.current.vadEnabled = enableVAD;
           audioStreamerRef.current.vadSpeechHoldTime = parseInt(silenceDuration);
 
           audioStreamerRef.current.onSpeechStatusChange = (isSpeaking) => {
             setIsUserSpeaking(isSpeaking);
             // Control video transmission based on speech
-            if (optimizeTokenUsage) {
+            if (enableVAD) {
               if (videoStreamerRef.current) videoStreamerRef.current.transmitFrames = isSpeaking;
               if (screenCaptureRef.current) screenCaptureRef.current.transmitFrames = isSpeaking;
             }
@@ -438,7 +443,7 @@ Respond helpfully to all user messages.`
 
           // Configure Video Optimization
           if (videoStreamerRef.current) {
-            videoStreamerRef.current.alwaysTransmit = !optimizeTokenUsage;
+            videoStreamerRef.current.alwaysTransmit = !enableVAD;
           }
 
           if (videoPreviewRef.current) {
@@ -478,7 +483,7 @@ Respond helpfully to all user messages.`
 
           // Configure Screen Optimization
           if (screenCaptureRef.current) {
-            screenCaptureRef.current.alwaysTransmit = !optimizeTokenUsage;
+            screenCaptureRef.current.alwaysTransmit = !enableVAD;
           }
 
           if (videoPreviewRef.current) {
@@ -514,7 +519,7 @@ Respond helpfully to all user messages.`
       let base64Image = null;
 
       // If optimizing token usage, send a snapshot frame before the text
-      if (optimizeTokenUsage) {
+      if (enableVAD) {
         let snapshot = null;
         if (videoStreaming && videoStreamerRef.current) {
           try {
@@ -745,15 +750,7 @@ Respond helpfully to all user messages.`
                   />
                   <label>Enable affective dialog</label>
                 </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={optimizeTokenUsage}
-                    onChange={(e) => setOptimizeTokenUsage(e.target.checked)}
-                    disabled={connected}
-                  />
-                  <label>Optimize Token Usage (VAD)</label>
-                </div>
+
               </div>
 
               <div className="control-group">
@@ -809,13 +806,13 @@ Respond helpfully to all user messages.`
                 <div className="checkbox-group">
                   <input
                     type="checkbox"
-                    checked={disableActivityDetection}
+                    checked={enableVAD}
                     onChange={(e) =>
-                      setDisableActivityDetection(e.target.checked)
+                      setEnableVAD(e.target.checked)
                     }
                     disabled={connected}
                   />
-                  <label>Disable automatic activity detection</label>
+                  <label>Enable Voice Activity Detection (VAD)</label>
                 </div>
                 <div className="input-group">
                   <label>Silence duration (ms):</label>

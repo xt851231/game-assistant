@@ -18,6 +18,8 @@ export class AudioStreamer {
     this.vadEnabled = true; // Default to true (optimized)
     this.vadThreshold = 0.05; // Increased from 0.01 to avoid keyboard noise
     this.vadSpeechHoldTime = 1500; // ms to keep "speaking" after silence
+    this.prefixPadding = 500; // ms of audio to keep before speech starts
+    this.paddingBuffer = []; // Buffer for prefix padding
     this.lastSpeechTime = 0;
     this.isSpeaking = false;
     this.onSpeechStatusChange = null;
@@ -91,9 +93,19 @@ export class AudioStreamer {
 
             // Notify status change
             if (this.isSpeaking !== currentlySpeaking) {
+              const startedSpeaking = !this.isSpeaking && currentlySpeaking;
               this.isSpeaking = currentlySpeaking;
               if (this.onSpeechStatusChange) {
                 this.onSpeechStatusChange(currentlySpeaking);
+              }
+
+              // If started speaking, send the padding buffer first
+              if (startedSpeaking && this.client && this.client.connected) {
+                console.debug(`🎤 VAD: Speech started, sending ${this.paddingBuffer.length} padding chunks`);
+                this.paddingBuffer.forEach(chunk => {
+                  this.client.sendAudio(chunk);
+                });
+                this.paddingBuffer = [];
               }
 
               // If transitioning to silence, notify the adapter that speech ended
@@ -118,6 +130,16 @@ export class AudioStreamer {
               if (this.client && this.client.connected) {
                 this.client.sendAudio(base64Audio);
               }
+            } else {
+              // Not speaking, add to padding buffer
+              this.paddingBuffer.push(base64Audio);
+
+              // Maintain padding buffer size (4096 samples = 256ms per chunk at 16kHz)
+              // Each chunk is 4096 samples. 4096 / 16000 = ~0.256s or 256ms
+              const maxPaddingChunks = Math.ceil(this.prefixPadding / 256);
+              if (this.paddingBuffer.length > maxPaddingChunks) {
+                this.paddingBuffer.shift();
+              }
             }
           } else {
             // Always send if VAD is disabled
@@ -136,6 +158,7 @@ export class AudioStreamer {
 
       this.isStreaming = true;
       console.log("🎤 Audio streaming started");
+
       return true;
     } catch (error) {
       console.error("Failed to start audio streaming:", error);
@@ -166,6 +189,7 @@ export class AudioStreamer {
     }
 
     console.log("🛑 Audio streaming stopped");
+    this.paddingBuffer = [];
   }
 
   /**

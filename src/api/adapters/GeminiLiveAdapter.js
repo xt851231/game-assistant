@@ -54,6 +54,18 @@ export class GeminiLiveAdapter extends ModelAdapter {
                         }
                     }
                 },
+                // Add Activity Detection Config
+                // Server-side VAD is always enabled for speech boundary detection
+                // The client-side enableVAD toggle only controls local silence suppression
+                realtimeInputConfig: {
+                    automaticActivityDetection: {
+                        disabled: false, // Always keep server VAD enabled
+                        silenceDurationMs: this.config.silenceDuration || 1500,
+                        prefixPaddingMs: this.config.prefixPadding || 500,
+                        startOfSpeechSensitivity: this.config.startSpeechSensitivity || "START_SENSITIVITY_UNSPECIFIED",
+                        endOfSpeechSensitivity: this.config.endOfSpeechSensitivity || "END_SENSITIVITY_UNSPECIFIED"
+                    }
+                },
                 // Disable thoughts in response output
                 thinkingConfig: {
                     includeThoughts: false
@@ -117,6 +129,34 @@ export class GeminiLiveAdapter extends ModelAdapter {
                 mimeType: "audio/pcm;rate=16000"
             }
         });
+    }
+
+    /**
+     * Send activity start marker (for manual VAD mode)
+     * Required when automaticActivityDetection.disabled is true
+     */
+    sendActivityStart() {
+        if (!this.session) return;
+        try {
+            this.session.sendRealtimeInput({ activityStart: {} });
+            console.debug('📣 Sent activityStart to Gemini Live API');
+        } catch (error) {
+            console.error('Failed to send activityStart:', error);
+        }
+    }
+
+    /**
+     * Send activity end marker (for manual VAD mode)
+     * Required when automaticActivityDetection.disabled is true
+     */
+    sendActivityEnd() {
+        if (!this.session) return;
+        try {
+            this.session.sendRealtimeInput({ activityEnd: {} });
+            console.debug('📣 Sent activityEnd to Gemini Live API');
+        } catch (error) {
+            console.error('Failed to send activityEnd:', error);
+        }
     }
 
     async sendImage(base64Image, mimeType = "image/jpeg") {

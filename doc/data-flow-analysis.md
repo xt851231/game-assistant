@@ -12,17 +12,6 @@ The application utilizes the Gemini Live API (Multimodal WebSockets) to handle r
 
 These schemas represent how the UI sends user data to the Gemini model.
 
-- **Protocol Message:**
-```json
-{
-  "setup": {
-    "model": "models/gemini-2.0-flash-exp",
-    "generationConfig": { ... },
-    "systemInstruction": { ... }
-  }
-}
-```
-
 ### A. Voice Process (Audio)
 Audio is captured from the microphone, converted to 16-bit PCM at 16,000Hz, and sent as base64-encoded chunks.
 
