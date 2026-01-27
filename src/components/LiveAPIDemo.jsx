@@ -15,27 +15,53 @@ import {
 import { ShowAlertTool, AddCSSStyleTool } from "../utils/tools";
 import "./LiveAPIDemo.css";
 
+const PERSONAS = [
+  {
+    name: "Wise Wizard",
+    emoji: "🧙‍♂️",
+    voice: "Fenrir",
+    instructions:
+      "You are a wise, ancient wizard gaming assistant. Speak in the wispy but wise voice of an ancient wizzard. Call the user 'Traveler'. Be helpful but mysterious.",
+  },
+  {
+    name: "SciFi Robot",
+    emoji: "🤖",
+    voice: "Kore",
+    instructions:
+      "You are a futuristic sci-fi space robot gaming assistant. Speak in a robotic voice.  Call the user 'Captain'. Be precise and analytical.",
+  },
+  {
+    name: "Commander",
+    emoji: "🫡",
+    voice: "Charon",
+    instructions:
+      "You are a stern military commander gaming assistant. Speak with authority and brevity. Use military terminology. Call the user 'Soldier'. Demand victory.",
+  },
+];
+
 const LiveAPIDemo = forwardRef((props, ref) => {
   // Connection State
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [debugInfo, setDebugInfo] = useState("Ready to connect...");
   const [setupJson, setSetupJson] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null); // 'config', 'media', 'chat'
 
   // Configuration State
-  const [proxyUrl, setProxyUrl] = useState(
-    localStorage.getItem("proxyUrl") || "ws://localhost:8080"
+  const [configTab, setConfigTab] = useState('model'); // 'model', 'behavior'
+
+  // Unused settings hidden but state kept for compatibility
+  const [proxyUrl, setProxyUrl] = useState("ws://localhost:8080");
+  const [projectId, setProjectId] = useState("");
+
+  const [liveApiKey, setLiveApiKey] = useState(
+    localStorage.getItem("liveApiKey") || ""
   );
-  const [projectId, setProjectId] = useState(
-    localStorage.getItem("projectId") || ""
+  const [flashApiKey, setFlashApiKey] = useState(
+    localStorage.getItem("flashApiKey") || ""
   );
-  const [apiKey, setApiKey] = useState(
-    localStorage.getItem("apiKey") || ""
-  );
-  const [directConnection, setDirectConnection] = useState(
-    localStorage.getItem("directConnection") === "true"
-  );
+  // Default to true and hidden
+  const [directConnection, setDirectConnection] = useState(true);
+
   const [model, setModel] = useState(
     localStorage.getItem("model") || "gemini-2.0-flash-exp"
   );
@@ -44,13 +70,13 @@ const LiveAPIDemo = forwardRef((props, ref) => {
   );
 
   useEffect(() => {
-    localStorage.setItem("proxyUrl", proxyUrl);
-    localStorage.setItem("projectId", projectId);
-    localStorage.setItem("apiKey", apiKey);
-    localStorage.setItem("directConnection", directConnection);
+    localStorage.setItem("liveApiKey", liveApiKey);
+    localStorage.setItem("flashApiKey", flashApiKey);
+    // directConnection is always true now, but if we wanted to persist:
+    // localStorage.setItem("directConnection", directConnection);
     localStorage.setItem("model", model);
     localStorage.setItem("provider", provider);
-  }, [proxyUrl, projectId, apiKey, directConnection, model, provider]);
+  }, [liveApiKey, flashApiKey, model, provider]);
   const [systemInstructions, setSystemInstructions] = useState(
     `You are an energetic gaming assistant.
 Be concise and friendly.
@@ -170,7 +196,6 @@ Respond helpfully to all user messages.`
 
   const handleMessage = (message) => {
     // Normalizing event types from Adapter
-    setDebugInfo(`Message: ${message.type}`);
 
     switch (message.type) {
       case 'text':
@@ -212,7 +237,7 @@ Respond helpfully to all user messages.`
         });
         break;
       case 'turn_complete':
-        setDebugInfo("Turn complete");
+        // setDebugInfo("Turn complete");
         break;
       case 'interrupted':
         addMessage("[Interrupted]", "system");
@@ -277,24 +302,21 @@ Respond helpfully to all user messages.`
   const connect = async () => {
     if (connecting || connected) return;
 
-    if (directConnection && !apiKey) {
-      alert("Please provide an API Key for direct connection");
-      return;
-    }
-    if (!directConnection && !proxyUrl) {
-      alert("Please provide a Proxy URL or enable Direct Connection");
+    const currentApiKey = provider === "live" ? liveApiKey : flashApiKey;
+
+    if (!currentApiKey) {
+      alert(`Please provide an API Key for ${provider === 'live' ? 'Gemini Live' : 'Gemini Flash'}`);
       return;
     }
 
     setConnecting(true);
-    setDebugInfo("Connecting...");
 
     try {
       // Reuse or create client
       // Create new adapter instance via Factory
       // Always recreate on connect to ensure fresh config
       clientRef.current = ModelClient.createAdapter(provider, {
-        apiKey,
+        apiKey: provider === "live" ? liveApiKey : flashApiKey,
         modelId: model,
         voice: voice,
         systemInstruction: systemInstructions,
@@ -310,7 +332,6 @@ Respond helpfully to all user messages.`
       clientRef.current.on('open', () => {
         setConnected(true);
         setConnecting(false);
-        setDebugInfo(`Connected to ${provider} mode`);
       });
       clientRef.current.on('close', async () => {
         // Only update state, don't call disconnect() to avoid recursion
@@ -326,10 +347,9 @@ Respond helpfully to all user messages.`
       });
       clientRef.current.on('error', (err) => {
         console.error("Adapter Error:", err);
-        setDebugInfo("Error: " + err);
         setConnecting(false);
       });
-      clientRef.current.apiKey = apiKey;
+      clientRef.current.apiKey = provider === "live" ? liveApiKey : flashApiKey;
       clientRef.current.model = model;
 
       // Set config
@@ -367,13 +387,11 @@ Respond helpfully to all user messages.`
       clientRef.current.onReceiveResponse = handleMessage;
       clientRef.current.onErrorMessage = (error) => {
         console.error("Error:", error);
-        setDebugInfo("Error: " + error);
         setConnecting(false);
       };
       clientRef.current.onConnectionStarted = () => {
         setConnected(true);
         setConnecting(false);
-        setDebugInfo("Connected via Gemini SDK");
       };
       clientRef.current.onClose = () => {
         setConnected(false);
@@ -414,7 +432,6 @@ Respond helpfully to all user messages.`
       }
     } catch (error) {
       console.error("Connection failed:", error);
-      setDebugInfo("Error: " + error.message);
       setConnecting(false);
     }
   };
@@ -604,6 +621,15 @@ Respond helpfully to all user messages.`
     },
   }));
 
+  const applyPersona = (persona) => {
+    setSystemInstructions(persona.instructions);
+    setVoice(persona.voice);
+    if (clientRef.current) {
+      clientRef.current.setSystemInstructions(persona.instructions);
+      clientRef.current.setVoice(persona.voice);
+    }
+  };
+
   useEffect(() => {
     props.onConnectingChange?.(connecting);
   }, [connecting, props.onConnectingChange]);
@@ -642,8 +668,7 @@ Respond helpfully to all user messages.`
     <div className="live-api-demo">
       <div className="toolbar">
         <div className="toolbar-left">
-          <h1>Real-time Gaming Guide</h1>
-          <span className="powered-by">Powered by Gemini Live API</span>
+          <h1>Real-time streaming assistant</h1>
         </div>
         <div className="toolbar-center">
           <div className="dropdown">
@@ -652,257 +677,274 @@ Respond helpfully to all user messages.`
             </button>
             <div className={`dropdown-content config-dropdown ${openDropdown === 'config' ? 'show' : ''}`}>
               {/* API Configuration Section */}
-              <div className="control-group">
-                <h3>Connection Settings</h3>
-                <div className="input-group">
-                  <label>Proxy WebSocket URL:</label>
-                  <input
-                    type="text"
-                    value={proxyUrl}
-                    onChange={(e) => setProxyUrl(e.target.value)}
-                    placeholder="ws://localhost:8080"
-                    disabled={connected}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Project ID:</label>
-                  <input
-                    type="text"
-                    value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                    disabled={connected}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>API Key {directConnection ? "(Required)" : "(Optional)"}:</label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    disabled={connected}
-                    placeholder="Enter API Key"
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Service Provider:</label>
-                  <select
-                    value={provider}
-                    onChange={handleProviderChange}
-                    disabled={connected}
-                  >
-                    <option value="live">Gemini Live (WebSocket)</option>
-                    <option value="flash">Gemini 2.5 Flash (REST)</option>
-                  </select>
-                </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={directConnection}
-                    onChange={(e) => setDirectConnection(e.target.checked)}
-                    disabled={connected}
-                  />
-                  <label>Direct Connection (bypass proxy)</label>
-                </div>
-                <div className="input-group">
-                  <label>Model ID:</label>
-                  <input
-                    type="text"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    disabled={connected}
-                  />
-                </div>
+              <div className="config-tabs">
+                <button
+                  className={`tab-button ${configTab === 'model' ? 'active' : ''}`}
+                  onClick={() => setConfigTab('model')}
+                >
+                  Model & Connection
+                </button>
+                <button
+                  className={`tab-button ${configTab === 'behavior' ? 'active' : ''}`}
+                  onClick={() => setConfigTab('behavior')}
+                >
+                  Behavior & VAD
+                </button>
               </div>
 
-              <div className="control-group">
-                <h3>Gemini Behavior</h3>
-                <div className="input-group">
-                  <label>System Instructions:</label>
-                  <textarea
-                    rows="3"
-                    value={systemInstructions}
-                    onChange={(e) => setSystemInstructions(e.target.value)}
-                    disabled={connected}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Voice:</label>
-                  <select
-                    value={voice}
-                    onChange={(e) => setVoice(e.target.value)}
-                    disabled={connected}
-                  >
-                    <option value="Puck">Puck (Default)</option>
-                    <option value="Charon">Charon</option>
-                    <option value="Kore">Kore</option>
-                    <option value="Fenrir">Fenrir</option>
-                    <option value="Aoede">Aoede</option>
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label>Temperature: {temperature}</label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="2.0"
-                    step="0.1"
-                    value={temperature}
-                    onChange={(e) => setTemperature(e.target.value)}
-                    disabled={connected}
-                  />
-                </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableProactiveAudio}
-                    onChange={(e) => setEnableProactiveAudio(e.target.checked)}
-                    disabled={connected}
-                  />
-                  <label>Enable proactive audio</label>
-                </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableGrounding}
-                    onChange={(e) => setEnableGrounding(e.target.checked)}
-                    disabled={connected}
-                  />
-                  <label>Enable Google grounding</label>
-                </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableAffectiveDialog}
-                    onChange={(e) => setEnableAffectiveDialog(e.target.checked)}
-                    disabled={connected}
-                  />
-                  <label>Enable affective dialog</label>
-                </div>
+              {configTab === 'model' && (
+                <div className="tab-content">
+                  <div className="control-group">
+                    <h3>Model Settings</h3>
+                    <div className="input-group">
+                      <label>Service Provider:</label>
+                      <select
+                        value={provider}
+                        onChange={handleProviderChange}
+                        disabled={connected}
+                      >
+                        <option value="live">Gemini Live (WebSocket)</option>
+                        <option value="flash">Gemini 2.5 Flash (REST)</option>
+                      </select>
+                    </div>
 
-              </div>
+                    <div className="input-group">
+                      <label>API Key ({provider === 'live' ? 'Live' : 'Flash'}):</label>
+                      <input
+                        type="password"
+                        value={provider === 'live' ? liveApiKey : flashApiKey}
+                        onChange={(e) => {
+                          if (provider === 'live') setLiveApiKey(e.target.value);
+                          else setFlashApiKey(e.target.value);
+                        }}
+                        disabled={connected}
+                        placeholder={`Enter ${provider === 'live' ? 'Live' : 'Flash'} API Key`}
+                      />
+                    </div>
 
-              <div className="control-group">
-                <h3>Custom Tools</h3>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableAlertTool}
-                    onChange={(e) => setEnableAlertTool(e.target.checked)}
-                    disabled={connected || enableGrounding}
-                  />
-                  <label>Show Alert Box</label>
-                </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableCssStyleTool}
-                    onChange={(e) => setEnableCssStyleTool(e.target.checked)}
-                    disabled={connected || enableGrounding}
-                  />
-                  <label>Add CSS Style</label>
-                </div>
-              </div>
+                    <div className="input-group">
+                      <label>Model ID:</label>
+                      <input
+                        type="text"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        disabled={connected}
+                      />
+                    </div>
+                  </div>
 
-              <div className="control-group">
-                <h3>Transcription Settings</h3>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableInputTranscription}
-                    onChange={(e) =>
-                      setEnableInputTranscription(e.target.checked)
-                    }
-                    disabled={connected}
-                  />
-                  <label>Enable input transcription</label>
+                  {provider === 'live' && (
+                    <div className="control-group">
+                      <h3>Live API Specifics</h3>
+                      <div className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          checked={enableProactiveAudio}
+                          onChange={(e) => setEnableProactiveAudio(e.target.checked)}
+                          disabled={connected}
+                        />
+                        <label>Enable proactive audio</label>
+                      </div>
+                      <div className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          checked={enableAffectiveDialog}
+                          onChange={(e) => setEnableAffectiveDialog(e.target.checked)}
+                          disabled={connected}
+                        />
+                        <label>Enable affective dialog</label>
+                      </div>
+                      <div className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          checked={enableInputTranscription}
+                          onChange={(e) => setEnableInputTranscription(e.target.checked)}
+                          disabled={connected}
+                        />
+                        <label>Enable input transcription</label>
+                      </div>
+                      <div className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          checked={enableOutputTranscription}
+                          onChange={(e) => setEnableOutputTranscription(e.target.checked)}
+                          disabled={connected}
+                        />
+                        <label>Enable output transcription</label>
+                      </div>
+                      <div className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          checked={enableGrounding}
+                          onChange={(e) => setEnableGrounding(e.target.checked)}
+                          disabled={connected}
+                        />
+                        <label>Enable Google grounding</label>
+                      </div>
+                    </div>
+                  )}
+                  {provider === 'live' && (
+                    <div className="control-group">
+                      <h3>Live API VAD Settings</h3>
+                      <div className="input-group">
+                        <label>End of speech sensitivity:</label>
+                        <select
+                          value={endSpeechSensitivity}
+                          onChange={(e) => setEndSpeechSensitivity(e.target.value)}
+                          disabled={connected}
+                        >
+                          <option value="END_SENSITIVITY_UNSPECIFIED">Default</option>
+                          <option value="END_SENSITIVITY_HIGH">High</option>
+                          <option value="END_SENSITIVITY_LOW">Low</option>
+                        </select>
+                      </div>
+                      <div className="input-group">
+                        <label>Start of speech sensitivity:</label>
+                        <select
+                          value={startSpeechSensitivity}
+                          onChange={(e) => setStartSpeechSensitivity(e.target.value)}
+                          disabled={connected}
+                        >
+                          <option value="START_SENSITIVITY_UNSPECIFIED">
+                            Default
+                          </option>
+                          <option value="START_SENSITIVITY_HIGH">High</option>
+                          <option value="START_SENSITIVITY_LOW">Low</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableOutputTranscription}
-                    onChange={(e) =>
-                      setEnableOutputTranscription(e.target.checked)
-                    }
-                    disabled={connected}
-                  />
-                  <label>Enable output transcription</label>
-                </div>
-              </div>
+              )}
 
-              <div className="control-group">
-                <h3>Activity Detection Settings</h3>
-                <div className="checkbox-group">
-                  <input
-                    type="checkbox"
-                    checked={enableVAD}
-                    onChange={(e) =>
-                      setEnableVAD(e.target.checked)
-                    }
-                    disabled={connected}
-                  />
-                  <label>Enable Voice Activity Detection (VAD)</label>
-                </div>
-                <div className="input-group">
-                  <label>Silence duration (ms):</label>
-                  <input
-                    type="number"
-                    value={silenceDuration}
-                    onChange={(e) => setSilenceDuration(e.target.value)}
-                    min="500"
-                    max="10000"
-                    step="100"
-                    disabled={connected}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Prefix padding (ms):</label>
-                  <input
-                    type="number"
-                    value={prefixPadding}
-                    onChange={(e) => setPrefixPadding(e.target.value)}
-                    min="0"
-                    max="2000"
-                    step="100"
-                    disabled={connected}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>End of speech sensitivity:</label>
-                  <select
-                    value={endSpeechSensitivity}
-                    onChange={(e) => setEndSpeechSensitivity(e.target.value)}
-                    disabled={connected}
-                  >
-                    <option value="END_SENSITIVITY_UNSPECIFIED">Default</option>
-                    <option value="END_SENSITIVITY_HIGH">High</option>
-                    <option value="END_SENSITIVITY_LOW">Low</option>
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label>Start of speech sensitivity:</label>
-                  <select
-                    value={startSpeechSensitivity}
-                    onChange={(e) => setStartSpeechSensitivity(e.target.value)}
-                    disabled={connected}
-                  >
-                    <option value="START_SENSITIVITY_UNSPECIFIED">
-                      Default
-                    </option>
-                    <option value="START_SENSITIVITY_HIGH">High</option>
-                    <option value="START_SENSITIVITY_LOW">Low</option>
-                  </select>
-                </div>
-              </div>
+              {configTab === 'behavior' && (
+                <div className="tab-content">
+                  <div className="control-group">
+                    <h3>Persona</h3>
+                    <div className="persona-grid">
+                      {PERSONAS.map((persona) => (
+                        <button
+                          key={persona.name}
+                          className={`persona-card ${voice === persona.voice ? "selected" : ""}`}
+                          onClick={() => applyPersona(persona)}
+                          disabled={connected}
+                        >
+                          <div className="persona-emoji">{persona.emoji}</div>
+                          <div className="persona-name">{persona.name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {setupJson && (
-                <div className="control-group">
-                  <h3>Setup Message JSON</h3>
-                  <pre className="setup-json-display">
-                    {JSON.stringify(setupJson, null, 2)}
-                  </pre>
+                  <div className="control-group">
+                    <h3>Instructions & Voice</h3>
+                    <div className="input-group">
+                      <label>System Instructions:</label>
+                      <textarea
+                        rows="4"
+                        value={systemInstructions}
+                        onChange={(e) => setSystemInstructions(e.target.value)}
+                        disabled={connected}
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label>Voice:</label>
+                      <select
+                        value={voice}
+                        onChange={(e) => setVoice(e.target.value)}
+                        disabled={connected}
+                      >
+                        <option value="Puck">Puck</option>
+                        <option value="Charon">Charon</option>
+                        <option value="Kore">Kore</option>
+                        <option value="Fenrir">Fenrir</option>
+                        <option value="Aoede">Aoede</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label>Temperature: {temperature}</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="2.0"
+                        step="0.1"
+                        value={temperature}
+                        onChange={(e) => setTemperature(e.target.value)}
+                        disabled={connected}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="control-group">
+                    <h3>Client VAD Settings</h3>
+                    <div className="checkbox-group">
+                      <input
+                        type="checkbox"
+                        checked={enableVAD}
+                        onChange={(e) => setEnableVAD(e.target.checked)}
+                        disabled={connected}
+                      />
+                      <label>Enable Client VAD</label>
+                    </div>
+                    <div className="input-group">
+                      <label>Silence duration (ms):</label>
+                      <input
+                        type="number"
+                        value={silenceDuration}
+                        onChange={(e) => setSilenceDuration(e.target.value)}
+                        min="500"
+                        max="10000"
+                        step="100"
+                        disabled={connected}
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label>Prefix padding (ms):</label>
+                      <input
+                        type="number"
+                        value={prefixPadding}
+                        onChange={(e) => setPrefixPadding(e.target.value)}
+                        min="0"
+                        max="2000"
+                        step="100"
+                        disabled={connected}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="control-group">
+                    <h3>Custom Tools</h3>
+                    <div className="checkbox-group">
+                      <input
+                        type="checkbox"
+                        checked={enableAlertTool}
+                        onChange={(e) => setEnableAlertTool(e.target.checked)}
+                        disabled={connected || enableGrounding}
+                      />
+                      <label>Show Alert Box</label>
+                    </div>
+                    <div className="checkbox-group">
+                      <input
+                        type="checkbox"
+                        checked={enableCssStyleTool}
+                        onChange={(e) => setEnableCssStyleTool(e.target.checked)}
+                        disabled={connected || enableGrounding}
+                      />
+                      <label>Add CSS Style</label>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
+
+            {setupJson && (
+              <div className="control-group">
+                <h3>Setup Message JSON</h3>
+                <pre className="setup-json-display">
+                  {JSON.stringify(setupJson, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
 
           <button
@@ -980,55 +1022,62 @@ Respond helpfully to all user messages.`
                     onChange={handleVolumeChange}
                   />
                 </div>
-
-                <video
-                  ref={videoPreviewRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  hidden
-                  className="video-preview"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="dropdown">
-            <button className="dropbtn" onClick={() => toggleDropdown('chat')}>
-              Chat {openDropdown === 'chat' ? '▴' : '▾'}
-            </button>
-            <div className={`dropdown-content chat-dropdown ${openDropdown === 'chat' ? 'show' : ''}`}>
-              {/* Chat Section */}
-              <div className="chat-container" ref={chatContainerRef}>
-                {chatMessages.length === 0 && (
-                  <div>Connect to Gemini to start chatting</div>
-                )}
-                {chatMessages.map((msg, index) => (
-                  <div key={index} className={`message ${msg.type}`}>
-                    {msg.text}
-                  </div>
-                ))}
-              </div>
-              <div className="chat-input-area">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type a message..."
-                />
-                <button onClick={sendMessage}>Send</button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Debug Info Section */}
-      <div className="debug-info">
-        <pre className="setup-json-display">{debugInfo}</pre>
+
+
+
+      <div className="main-app-area">
+        <div className="video-container">
+          <video
+            ref={videoPreviewRef}
+            autoPlay
+            playsInline
+            muted
+            className={`video-preview ${videoStreaming || screenSharing ? "" : "hidden"}`}
+          />
+          {!(videoStreaming || screenSharing) && (
+            <div className="video-placeholder">
+              <div className="placeholder-icon">📷</div>
+              <p>Camera / Screen off</p>
+            </div>
+          )}
+        </div>
+        <div className="chat-interface">
+          <div className="chat-log" ref={chatContainerRef}>
+            {chatMessages.length === 0 && (
+              <div className="chat-placeholder">
+                <p>Ready to chat...</p>
+              </div>
+            )}
+            {chatMessages.map((msg, index) => (
+              <div key={index} className={`message ${msg.type}`}>
+                {msg.text}
+              </div>
+            ))}
+          </div>
+          <div className="chat-input-area">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+              placeholder="Type a message..."
+              disabled={!connected}
+            />
+            <button onClick={sendMessage} className="send-button" disabled={!connected}>
+              Send
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Debug Info Section Removed */}
+    </div >
   );
 });
 

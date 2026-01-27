@@ -1,8 +1,8 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .logo {
@@ -132,19 +132,7 @@
   font-weight: 500;
 }
 
-.video-container {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  background-color: #000;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  position: relative;
-  margin-left: 60px;
-}
+/* Removed: .video-container rule moved to LiveAPIDemo.css */
 
 .main-video-preview {
   width: 100%;

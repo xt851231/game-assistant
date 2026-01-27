@@ -4,9 +4,20 @@
 - **Reconnection Fix**: Implemented asynchronous cleanup in `AudioStreamer` and `LiveAPIDemo.jsx` to ensure `AudioContext` is fully closed before reconnection, resolving the "app stopped responding" issue.
 - **Tool Integration**: Fixed the broken tool execution logic and correctly wired up `ShowAlertTool` and `AddCSSStyleTool` to the Gemini API.
 - **Improved Logging**: Made media cleanup idempotent to prevent redundant "stopped" messages in the console.
+- **UI Refactoring**:
+    - Completed full refactor of Configuration and Media controls into a clean, tabbed interface.
+    - Implemented "Behavior & VAD" tab with Persona, Voice, and Client VAD settings.
+    - Simplified `App.jsx` layout, moving all controls to `LiveAPIDemo.jsx`.
+    - Verified Persona selection logic (Voice auto-update) and Tab switching.
+- **Layout Fixes & Cleanup**:
+    - Removed default constrained layout for full-screen immersive experience.
+    - **Removed Debug Info**: Completely deleted `debugInfo` state, logic, and UI elements.
+    - **Toolbar Reorganization**: Grouped Configuration, Connect Button, and Media controls in the center.
+    - Corrected "Real-time Gaming Guide" title to "Real-time streaming assistant".
 
 ## Remaining Items
 - Monitor for any further stability issues during long sessions.
+- Deploy and test with real API keys (User Action).
 
 # Progress Log - 2026-01-26
 
