@@ -331,48 +331,168 @@ button.connecting {
   overflow: hidden;
   position: relative;
   background-color: black;
-  /* Immersive background */
 }
 
-/* Video Container */
-.video-container {
-  /* Enforce 16:9 aspect ratio */
-  aspect-ratio: 16 / 9;
-  height: 100%;
-  width: auto;
-  /* Let width be determined by height * ratio */
-  flex: 0 0 auto;
-  /* Don't grow, don't shrink, let size be intrinsic */
+/* Media Column (Video + Tools) */
+.media-column {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #000;
+  flex-direction: column;
+  flex: 1;
+  /* Take remaining space */
+  min-width: 0;
+  /* Allow shrinking */
+  background-color: #f8f9fa;
+  /* Light background for tools area */
+  position: relative;
   overflow: hidden;
-  /* Ensure it doesn't grow beyond the container */
-  max-width: 100%;
+  /* Contain content */
+}
+
+
+/* Video Wrapper - Strict 16:9 Frame */
+.video-wrapper {
+  position: relative;
+  flex: 1;
+  /* Take available space in main-app-area */
+  max-width: calc(100vh * 16 / 9 - 100px);
+  /* Limit based on height */
+  min-width: 300px;
+  aspect-ratio: 16 / 9;
+  background-color: #000;
+  flex-shrink: 0;
+  z-index: 1;
+  overflow: hidden;
+  /* Clip anything that extends outside */
 }
 
 .video-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  /* Maintain aspect ratio */
-  max-width: 100%;
-  max-height: 100%;
+}
+
+/* Ensure DrawingCanvas sits perfectly on top and fills wrapper */
+.drawing-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.drawing-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Tools Container - Vertical Bar */
+.tools-container {
+  background-color: #f8f9fa;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  /* Stack vertically */
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  border-left: 1px solid #dadce0;
+  border-right: 1px solid #dadce0;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.tool-button {
+  background: white;
+  border: 1px solid #dadce0;
+  color: #5f6368;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 1.2rem;
+  width: 44px;
+  height: 44px;
+}
+
+.tool-button:hover {
+  background-color: #e8eaed;
+  border-color: #dadce0;
+  color: #202124;
+}
+
+.tool-button.active {
+  background-color: #e8f0fe;
+  border-color: #1a73e8;
+  color: #1a73e8;
+}
+
+.color-picker {
+  display: flex;
+  flex-direction: column;
+  /* Stack vertically */
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid #dadce0;
+  border-bottom: 1px solid #dadce0;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px #dadce0;
+  transition: transform 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.active {
+  box-shadow: 0 0 0 2px #1a73e8;
+  border-color: white;
+}
+
+.size-selector {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  color: #5f6368;
+  background-color: white;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.size-selector:focus {
+  border-color: #1a73e8;
 }
 
 .video-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #5f6368;
-}
-
-.placeholder-icon {
-  font-size: 48px;
-  margin-bottom: 10px;
-  opacity: 0.5;
+  z-index: 5;
+  /* Below drawing layer */
 }
 
 /* Chat Interface */

@@ -13,6 +13,7 @@ import {
   AudioPlayer,
 } from "../utils/media-utils";
 import { ShowAlertTool, AddCSSStyleTool } from "../utils/tools";
+import DrawingCanvas from "./DrawingCanvas";
 import "./LiveAPIDemo.css";
 
 const PERSONAS = [
@@ -121,6 +122,12 @@ Respond helpfully to all user messages.`
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
 
+  // Drawing Tools State
+  const [activeTool, setActiveTool] = useState('pen'); // 'pen', 'text'
+  const [brushColor, setBrushColor] = useState('#FF0000');
+  const [brushSize, setBrushSize] = useState(4);
+  const COLORS = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FFFFFF'];
+
   // Refs
   const clientRef = useRef(null);
   const audioStreamerRef = useRef(null);
@@ -130,6 +137,7 @@ Respond helpfully to all user messages.`
   const videoPreviewRef = useRef(null);
   const chatContainerRef = useRef(null);
   const activeToolsMapRef = useRef({});
+  const canvasRef = useRef(null);
 
   // Initialize Media Devices
   useEffect(() => {
@@ -410,9 +418,15 @@ Respond helpfully to all user messages.`
 
         if (videoStreamerRef.current) videoStreamerRef.current.stop();
         videoStreamerRef.current = new VideoStreamer(clientRef.current);
+        if (canvasRef.current) {
+          videoStreamerRef.current.setOverlayCanvas(canvasRef.current.getCanvas());
+        }
 
         if (screenCaptureRef.current) screenCaptureRef.current.stop();
         screenCaptureRef.current = new ScreenCapture(clientRef.current);
+        if (canvasRef.current) {
+          screenCaptureRef.current.setOverlayCanvas(canvasRef.current.getCanvas());
+        }
 
         // Ensure AudioPlayer is initialized and resumed
         if (!audioPlayerRef.current) {
@@ -478,11 +492,16 @@ Respond helpfully to all user messages.`
       try {
         if (!videoStreamerRef.current && clientRef.current) {
           videoStreamerRef.current = new VideoStreamer(clientRef.current);
+          if (canvasRef.current) {
+            videoStreamerRef.current.setOverlayCanvas(canvasRef.current.getCanvas());
+          }
         }
 
         if (videoStreamerRef.current) {
           const video = await videoStreamerRef.current.start({
             deviceId: selectedCamera,
+            width: 1280,
+            height: 720
           });
           setVideoStreaming(true);
 
@@ -520,6 +539,9 @@ Respond helpfully to all user messages.`
       try {
         if (!screenCaptureRef.current && clientRef.current) {
           screenCaptureRef.current = new ScreenCapture(clientRef.current);
+          if (canvasRef.current) {
+            screenCaptureRef.current.setOverlayCanvas(canvasRef.current.getCanvas());
+          }
         }
 
         if (screenCaptureRef.current) {
@@ -1032,13 +1054,22 @@ Respond helpfully to all user messages.`
 
 
       <div className="main-app-area">
-        <div className="video-container">
+        {/* Video Container */}
+        <div className="video-wrapper">
           <video
             ref={videoPreviewRef}
             autoPlay
             playsInline
             muted
             className={`video-preview ${videoStreaming || screenSharing ? "" : "hidden"}`}
+          />
+          <DrawingCanvas
+            ref={canvasRef}
+            width={1280}
+            height={720}
+            activeTool={activeTool}
+            color={brushColor}
+            brushSize={brushSize}
           />
           {!(videoStreaming || screenSharing) && (
             <div className="video-placeholder">
@@ -1047,6 +1078,45 @@ Respond helpfully to all user messages.`
             </div>
           )}
         </div>
+
+        {/* Telestrator Tools - Vertical Bar Between Video and Chat */}
+        <div className="tools-container">
+          <button
+            className={`tool-button ${activeTool === 'pen' ? 'active' : ''}`}
+            onClick={() => setActiveTool('pen')}
+            title="Pen Tool"
+          >
+            ✏️
+          </button>
+          <div className="color-picker">
+            {COLORS.map(c => (
+              <div
+                key={c}
+                className={`color-swatch ${brushColor === c ? 'active' : ''}`}
+                style={{ backgroundColor: c }}
+                onClick={() => setBrushColor(c)}
+              />
+            ))}
+          </div>
+          <select
+            value={brushSize}
+            onChange={(e) => setBrushSize(parseInt(e.target.value))}
+            className="size-selector"
+          >
+            <option value={2}>S</option>
+            <option value={4}>M</option>
+            <option value={8}>L</option>
+            <option value={14}>XL</option>
+          </select>
+          <button
+            className="tool-button"
+            onClick={() => canvasRef.current?.clear()}
+            title="Clear All"
+          >
+            🗑️
+          </button>
+        </div>
+
         <div className="chat-interface">
           <div className="chat-log" ref={chatContainerRef}>
             {chatMessages.length === 0 && (

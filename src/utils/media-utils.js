@@ -273,6 +273,14 @@ class BaseVideoCapture {
   }
 
   /**
+   * Set an overlay canvas to be drawn on top of the video
+   * @param {HTMLCanvasElement} canvas
+   */
+  setOverlayCanvas(canvas) {
+    this.overlayCanvas = canvas;
+  }
+
+  /**
    * Start capturing and sending frames
    */
   startCapturing() {
@@ -287,6 +295,17 @@ class BaseVideoCapture {
         this.canvas.width,
         this.canvas.height
       );
+
+      // Draw overlay if it exists
+      if (this.overlayCanvas) {
+        this.ctx.drawImage(
+          this.overlayCanvas,
+          0,
+          0,
+          this.canvas.width,
+          this.canvas.height
+        );
+      }
 
       // Convert to JPEG and send
       this.canvas.toBlob(
