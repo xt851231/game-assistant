@@ -30,3 +30,8 @@ venv/
 .env
 .python-version
 get-pip.py
+
+# Agent and Artifacts
+.agent/
+artifacts/
+doc/
