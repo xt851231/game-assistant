@@ -138,6 +138,7 @@ Respond helpfully to all user messages.`
   const chatContainerRef = useRef(null);
   const activeToolsMapRef = useRef({});
   const canvasRef = useRef(null);
+  const cameraPreviewRef = useRef(null);
 
   // Initialize Media Devices
   useEffect(() => {
@@ -510,11 +511,21 @@ Respond helpfully to all user messages.`
             videoStreamerRef.current.alwaysTransmit = !enableVAD;
           }
 
-          if (videoPreviewRef.current) {
+          // If Screen Sharing is on, show camera in secondary preview
+          // Otherwise show in main preview
+          if (screenSharing && cameraPreviewRef.current) {
+            cameraPreviewRef.current.srcObject = video.srcObject;
+            cameraPreviewRef.current.hidden = false;
+          } else if (videoPreviewRef.current) {
             videoPreviewRef.current.srcObject = video.srcObject;
             videoPreviewRef.current.hidden = false;
           }
-          props.onPreviewStreamChange?.(video.srcObject);
+
+          // Only update props if this is the main stream (i.e. no screen sharing)
+          if (!screenSharing) {
+            props.onPreviewStreamChange?.(video.srcObject);
+          }
+
           addMessage("[Camera on]", "system");
         } else {
           addMessage("[Connect to Gemini first]", "system");
@@ -525,10 +536,23 @@ Respond helpfully to all user messages.`
     } else {
       if (videoStreamerRef.current) await videoStreamerRef.current.stop();
       setVideoStreaming(false);
+
+      // Clear from both potentially
       if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = null;
-        videoPreviewRef.current.hidden = true;
+        // Only clear main if it was showing camera (implied by !screenSharing logic check, but safe to clear if we track state)
+        // Actually, if screenSharing is true, camera is on secondary.
+        if (!screenSharing) {
+          videoPreviewRef.current.srcObject = null;
+          videoPreviewRef.current.hidden = true;
+        }
       }
+      if (cameraPreviewRef.current) {
+        cameraPreviewRef.current.srcObject = null;
+        // We can hide it or leave it empty? requirement says "hidden unless..."
+        // If we stop video, we should hide it.
+        // But wait, if screen capture is active, we just hide camera preview.
+      }
+
       props.onPreviewStreamChange?.(null);
       addMessage("[Camera off]", "system");
     }
@@ -553,6 +577,18 @@ Respond helpfully to all user messages.`
             screenCaptureRef.current.alwaysTransmit = !enableVAD;
           }
 
+          // If Camera was already streaming, move it to secondary
+          if (videoStreaming && videoStreamerRef.current && cameraPreviewRef.current && videoPreviewRef.current) {
+            // Get current camera stream from the active streamer
+            // Note: videoStreamerRef.current.stream might not be public/exposed easily if not stored.
+            // But we can get it from videoPreviewRef.current.srcObject BEFORE we overwrite it.
+            const cameraStream = videoPreviewRef.current.srcObject;
+            if (cameraStream) {
+              cameraPreviewRef.current.srcObject = cameraStream;
+              cameraPreviewRef.current.hidden = false;
+            }
+          }
+
           if (videoPreviewRef.current) {
             videoPreviewRef.current.srcObject = video.srcObject;
             videoPreviewRef.current.hidden = false;
@@ -568,10 +604,23 @@ Respond helpfully to all user messages.`
     } else {
       if (screenCaptureRef.current) await screenCaptureRef.current.stop();
       setScreenSharing(false);
-      if (!videoStreaming && videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = null;
-        videoPreviewRef.current.hidden = true;
+
+      // If camera is still streaming, move it back to main
+      if (videoStreaming && videoStreamerRef.current && videoPreviewRef.current && cameraPreviewRef.current) {
+        const cameraStream = cameraPreviewRef.current.srcObject;
+        if (cameraStream) {
+          videoPreviewRef.current.srcObject = cameraStream;
+          videoPreviewRef.current.hidden = false;
+          cameraPreviewRef.current.srcObject = null; // Clear secondary
+        }
+      } else {
+        // No camera, so just clear main
+        if (videoPreviewRef.current) {
+          videoPreviewRef.current.srcObject = null;
+          videoPreviewRef.current.hidden = true;
+        }
       }
+
       props.onPreviewStreamChange?.(null);
       addMessage("[Screen sharing off]", "system");
     }
@@ -1142,6 +1191,18 @@ Respond helpfully to all user messages.`
             <button onClick={sendMessage} className="send-button" disabled={!connected}>
               Send
             </button>
+          </div>
+
+          {/* Secondary Video (Camera) - Only visible when screen sharing AND camera is on */}
+          <div className={`secondary-video-container ${!screenSharing || !videoStreaming ? 'hidden' : ''}`}>
+            <video
+              ref={cameraPreviewRef}
+              autoPlay
+              playsInline
+              muted
+              className="secondary-video"
+            />
+            <span className="secondary-video-label">Camera</span>
           </div>
         </div>
       </div>
