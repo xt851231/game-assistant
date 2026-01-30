@@ -35,3 +35,4 @@ get-pip.py
 .agent/
 artifacts/
 doc/
+UI_reference/
