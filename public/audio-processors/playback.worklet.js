@@ -11,14 +11,18 @@ class PCMProcessor extends AudioWorkletProcessor {
       if (event.data === "interrupt") {
         // Clear the queue on interrupt
         this.audioQueue = [];
-      } else if (event.data instanceof Float32Array) {
-        // Add audio data to the queue
-        this.audioQueue.push(event.data);
+      } else {
+        // Assume data is Int16Array (PCM16) or Float32Array
+        // We'll handle conversion in process() if needed
+        const data = event.data;
+        if (data instanceof Int16Array || data instanceof Float32Array) {
+           this.audioQueue.push(data);
+        }
       }
     };
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs, outputs, _parameters) {
     const output = outputs[0];
     if (output.length === 0) return true;
 
@@ -38,14 +42,22 @@ class PCMProcessor extends AudioWorkletProcessor {
       const remainingBuffer = currentBuffer.length;
       const copyLength = Math.min(remainingOutput, remainingBuffer);
 
-      // Copy audio data to output
-      for (let i = 0; i < copyLength; i++) {
-        channel[outputIndex++] = currentBuffer[i];
+      // Copy audio data to output (converting to Float32 if necessary)
+      if (currentBuffer instanceof Int16Array) {
+        for (let i = 0; i < copyLength; i++) {
+          // Convert PCM16 to Float32 [-1.0, 1.0]
+          channel[outputIndex++] = currentBuffer[i] / 32768;
+        }
+      } else {
+        // Already Float32
+        for (let i = 0; i < copyLength; i++) {
+          channel[outputIndex++] = currentBuffer[i];
+        }
       }
 
       // Update or remove the current buffer
       if (copyLength < remainingBuffer) {
-        this.audioQueue[0] = currentBuffer.slice(copyLength);
+        this.audioQueue[0] = currentBuffer.subarray(copyLength);
       } else {
         this.audioQueue.shift();
       }
