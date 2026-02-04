@@ -73,18 +73,16 @@ export class AudioStreamer {
         if (!this.isStreaming) return;
 
         if (event.data.type === "audio") {
-          const inputData = event.data.data;
-          const pcmData = this.convertToPCM16(inputData);
-          const base64Audio = this.arrayBufferToBase64(pcmData);
+          // data is now already Int16Array buffer
+          const pcmDataBuffer = event.data.data;
+
+          // Optimized base64 conversion
+          const base64Audio = this.arrayBufferToBase64(pcmDataBuffer);
 
           // VAD Logic
           if (this.vadEnabled) {
-            // Calculate RMS
-            let sumSquares = 0;
-            for (let i = 0; i < inputData.length; i++) {
-              sumSquares += inputData[i] * inputData[i];
-            }
-            const rms = Math.sqrt(sumSquares / inputData.length);
+            // RMS is now calculated in the worklet
+            const rms = event.data.rms;
 
             const now = Date.now();
             if (rms > this.vadThreshold) {
@@ -117,9 +115,11 @@ export class AudioStreamer {
                   this.client.onSpeechEnd();
                 } else {
                   // For Live API: Send trailing silence to trigger Turn Complete
-                  const silenceBuffer = new ArrayBuffer(inputData.length);
-                  new Int16Array(silenceBuffer).fill(0);
-                  const base64Silence = this.arrayBufferToBase64(silenceBuffer);
+                  // We need a buffer of 0s.
+                  // The original buffer size in worklet is 4096.
+                  const bufferSize = 4096;
+                  const silenceBuffer = new Int16Array(bufferSize).fill(0);
+                  const base64Silence = this.arrayBufferToBase64(silenceBuffer.buffer);
 
                   for (let j = 0; j < 20; j++) {
                     this.client.sendAudio(base64Silence);
@@ -200,25 +200,18 @@ export class AudioStreamer {
   }
 
   /**
-   * Convert Float32Array to PCM16 Int16Array
-   */
-  convertToPCM16(float32Array) {
-    const int16Array = new Int16Array(float32Array.length);
-    for (let i = 0; i < float32Array.length; i++) {
-      const sample = Math.max(-1, Math.min(1, float32Array[i]));
-      int16Array[i] = sample * 0x7fff;
-    }
-    return int16Array.buffer;
-  }
-
-  /**
    * Convert ArrayBuffer to base64
+   * Optimized to handle large buffers by processing in chunks
    */
   arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    const len = bytes.byteLength;
+    const chunkSize = 32768; // 32KB chunks to avoid stack overflow
+
+    for (let i = 0; i < len; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+      binary += String.fromCharCode.apply(null, chunk);
     }
     return window.btoa(binary);
   }
@@ -556,22 +549,16 @@ export class AudioPlayer {
         await this.audioContext.resume();
       }
 
-      // Convert base64 to Float32Array
-      const binaryString = atob(base64Audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      // Efficient Base64 decode using fetch
+      const response = await fetch(`data:application/octet-stream;base64,${base64Audio}`);
+      const buffer = await response.arrayBuffer();
+      // Input is PCM16 Little Endian
+      const int16Array = new Int16Array(buffer);
 
-      // Convert PCM16 LE to Float32
-      const inputArray = new Int16Array(bytes.buffer);
-      const float32Data = new Float32Array(inputArray.length);
-      for (let i = 0; i < inputArray.length; i++) {
-        float32Data[i] = inputArray[i] / 32768;
-      }
+      // Send directly to worklet - we'll let the worklet handle conversion to float
+      // Transfer the buffer to avoid copy
+      this.workletNode.port.postMessage(int16Array, [int16Array.buffer]);
 
-      // Send to worklet for playback
-      this.workletNode.port.postMessage(float32Data);
     } catch (error) {
       console.error("Error playing audio chunk:", error);
       throw error;

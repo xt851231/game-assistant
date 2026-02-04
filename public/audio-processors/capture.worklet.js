@@ -1,5 +1,6 @@
 /**
  * Audio Worklet Processor for capturing and processing audio
+ * Performs RMS calculation and PCM16 conversion on the audio thread
  */
 
 class AudioCaptureProcessor extends AudioWorkletProcessor {
@@ -10,7 +11,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     this.bufferIndex = 0;
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs, _outputs, _parameters) {
     const input = inputs[0];
 
     if (input && input.length > 0) {
@@ -19,13 +20,31 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
       // Buffer the incoming audio
       for (let i = 0; i < inputChannel.length; i++) {
         this.buffer[this.bufferIndex++] = inputChannel[i];
-        // When buffer is full, send it to main thread
+
+        // When buffer is full, process and send it
         if (this.bufferIndex >= this.bufferSize) {
-          // Send the buffered audio to the main thread
+          // 1. Calculate RMS for VAD
+          let sumSquares = 0;
+          for (let j = 0; j < this.bufferSize; j++) {
+            sumSquares += this.buffer[j] * this.buffer[j];
+          }
+          const rms = Math.sqrt(sumSquares / this.bufferSize);
+
+          // 2. Convert to PCM16
+          const pcm16 = new Int16Array(this.bufferSize);
+          for (let j = 0; j < this.bufferSize; j++) {
+            const s = Math.max(-1, Math.min(1, this.buffer[j]));
+            // Convert to 16-bit PCM (signed)
+            pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+
+          // 3. Send to main thread
+          // We transfer the buffer to avoid copying
           this.port.postMessage({
             type: "audio",
-            data: this.buffer.slice(),
-          });
+            data: pcm16.buffer,
+            rms: rms
+          }, [pcm16.buffer]);
 
           // Reset buffer
           this.bufferIndex = 0;
