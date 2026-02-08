@@ -80,6 +80,10 @@ class SpeechAudioContextSingleton {
      * Resume audio context if suspended (required after user interaction)
      */
     async resume() {
+        // Skip if already running - avoid unnecessary async overhead
+        if (this.audioContext && this.audioContext.state === 'running') {
+            return;
+        }
         if (this.audioContext && this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
         }

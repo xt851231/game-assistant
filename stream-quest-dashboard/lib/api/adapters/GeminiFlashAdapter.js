@@ -268,13 +268,6 @@ RESPONSE: [Your helpful response. Do not use emojis. Output text only.]
             let transcription = "";
             let responseText = "";
             let transcriptionEmitted = false;
-            let ttsBuffer = "";
-            const ttsPromises = [];
-
-            // Mark outputting true immediately if we expect to speak
-            if (this.voiceEnabled) {
-                this.isOutputting = true;
-            }
 
             for await (const chunk of response) {
                 const chunkText = chunk.text || '';
@@ -310,49 +303,35 @@ RESPONSE: [Your helpful response. Do not use emojis. Output text only.]
                             data: newContent,
                             endOfTurn: false
                         });
-
-                        // Stream to TTS
-                        if (this.voiceEnabled) {
-                            ttsBuffer += newContent;
-                            // Match sentence endings. We include the delimiter in the sentence.
-                            // Regex looks for [.!?] followed by whitespace, OR newlines.
-                            let match;
-                            while ((match = ttsBuffer.match(/([.!?]\s+|[\n]+)/))) {
-                                const delimiter = match[0];
-                                const index = match.index + delimiter.length;
-                                const sentence = ttsBuffer.substring(0, index);
-
-                                if (sentence.trim()) {
-                                    // Speak (returns promise that resolves when playback ends)
-                                    // We push it to track completion
-                                    ttsPromises.push(this.tts.speak(sentence));
-                                }
-
-                                ttsBuffer = ttsBuffer.substring(index);
-                            }
-                        }
                     }
                 }
             }
 
-            // Speak any remaining text
-            if (this.voiceEnabled && ttsBuffer.trim()) {
-                ttsPromises.push(this.tts.speak(ttsBuffer));
+            // Speak full response as single TTS call for consistent voice
+            if (this.voiceEnabled && responseText.trim()) {
+                this.isOutputting = true;
+                try {
+                    await this.tts.speak(responseText.trim());
+                } catch (e) {
+                    console.error("TTS Error:", e);
+                } finally {
+                    // Add a cool-down period to let echo dissipate
+                    console.debug("🎤 Flash: TTS finished, starting cool-down...");
+                    setTimeout(() => {
+                        this.isOutputting = false;
+                        console.debug("🎤 Flash: Cool-down complete, listening...");
+                    }, 1000);
+                }
+            } else {
+                this.isOutputting = false;
             }
-
-            // Debug: Log raw response for parsing analysis
-            console.log("🎤 Flash: Raw fullText:", fullText.substring(0, 200) + "...");
-            console.log("🎤 Flash: Contains TRANSCRIPT:", fullText.includes("TRANSCRIPT:"));
-            console.log("🎤 Flash: Contains RESPONSE:", fullText.includes("RESPONSE:"));
 
             // Update history with parsed content
             if (transcription) {
-                // Add to history as TEXT for better context in next turn
                 this.history.push({ role: 'user', parts: [{ text: transcription }] });
                 this.history.push({ role: 'model', parts: [{ text: responseText }] });
             } else {
                 console.warn("🎤 Flash: No transcription parsed, using fallback");
-                // Fallback if model ignored instructions
                 responseText = fullText;
                 this.history.push({ role: 'user', parts: [{ text: "[Audio Message]" }] });
                 this.history.push({ role: 'model', parts: [{ text: fullText }] });
@@ -360,26 +339,6 @@ RESPONSE: [Your helpful response. Do not use emojis. Output text only.]
 
             this.emit('content', { type: 'text', data: "", endOfTurn: true });
             this.emit('content', { type: 'turn_complete' });
-
-            // Wait for all TTS to finish before unmuting
-            if (this.voiceEnabled) {
-                try {
-                    await Promise.all(ttsPromises);
-                } catch (e) {
-                    console.error("TTS Error:", e);
-                } finally {
-                    // Add a cool-down period to let echo dissipate
-                    console.debug("🎤 Flash: TTS finished, starting cool-down...");
-                    setTimeout(() => {
-                        this.isOutputting = false; // Re-enable input after delay
-                        console.debug("🎤 Flash: Cool-down complete, listening...");
-                    }, 1000); // 1 second buffer
-                }
-            } else {
-                this.isOutputting = false;
-            }
-
-            // NOTE: History is already pushed above (lines 313-323) - no duplicate push needed
 
             console.log("🎤 Flash: Audio response received:", fullText.substring(0, 100) + "...");
 
@@ -436,45 +395,17 @@ RESPONSE: [Your helpful response. Do not use emojis. Output text only.]
             });
 
             let fullText = "";
-            let ttsBuffer = "";
-            const ttsPromises = [];
-
-            if (this.voiceEnabled) {
-                this.isOutputting = true;
-            }
 
             for await (const chunk of response) {
                 const chunkText = chunk.text || '';
                 fullText += chunkText;
 
-                // Emit text chunk
+                // Emit text chunk (for UI display)
                 this.emit('content', {
                     type: 'text',
                     data: chunkText,
                     endOfTurn: false
                 });
-
-                // Stream to TTS
-                if (this.voiceEnabled) {
-                    ttsBuffer += chunkText;
-                    let match;
-                    while ((match = ttsBuffer.match(/([.!?]\s+|[\n]+)/))) {
-                        const delimiter = match[0];
-                        const index = match.index + delimiter.length;
-                        const sentence = ttsBuffer.substring(0, index);
-
-                        if (sentence.trim()) {
-                            ttsPromises.push(this.tts.speak(sentence));
-                        }
-
-                        ttsBuffer = ttsBuffer.substring(index);
-                    }
-                }
-            }
-
-            // Speak remainder
-            if (this.voiceEnabled && ttsBuffer.trim()) {
-                ttsPromises.push(this.tts.speak(ttsBuffer));
             }
 
             // End of turn
@@ -485,10 +416,11 @@ RESPONSE: [Your helpful response. Do not use emojis. Output text only.]
             });
             this.emit('content', { type: 'turn_complete' });
 
-            // Wait for TTS
-            if (this.voiceEnabled) {
+            // Speak full response as single TTS call for consistent voice
+            if (this.voiceEnabled && fullText.trim()) {
+                this.isOutputting = true;
                 try {
-                    await Promise.all(ttsPromises);
+                    await this.tts.speak(fullText.trim());
                 } catch (e) {
                     console.error("TTS Error:", e);
                 } finally {

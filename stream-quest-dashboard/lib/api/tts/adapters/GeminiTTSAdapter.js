@@ -69,8 +69,8 @@ export class GeminiTTSAdapter extends TTSAdapter {
             this.queue.shift(); // Remove from queue
             this.isPlayingAudio = false;
 
-            // Allow a small tick for UI/cleanup, then process next
-            setTimeout(() => this.processQueue(), 10);
+            // Process next item immediately via microtask (no artificial delay)
+            queueMicrotask(() => this.processQueue());
         }
     }
 

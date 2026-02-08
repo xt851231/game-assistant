@@ -66,7 +66,7 @@ export const LiveAPIProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
 
             return [...prev, {
-                id: Date.now().toString(),
+                id: crypto.randomUUID(),
                 sender: type === 'user' ? 'You' : type === 'assistant' ? 'Gemini' : 'System',
                 text: text || '',
                 type: type,
@@ -82,7 +82,6 @@ export const LiveAPIProvider: React.FC<{ children: ReactNode }> = ({ children })
                 addMessage(message.data, 'assistant', message.endOfTurn);
                 break;
             case 'audio':
-                console.log('🔊 Received audio chunk, length:', message.data?.length);
                 if (audioPlayerRef.current) {
                     audioPlayerRef.current.play(message.data);
                 } else {

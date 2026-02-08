@@ -15,11 +15,17 @@ class PCMProcessor extends AudioWorkletProcessor {
             } else {
                 const data = event.data;
                 if (data && data.length) {
-                    // Write to buffer
-                    for (let i = 0; i < data.length; i++) {
-                        this.buffer[this.writeIndex % this.bufferSize] = data[i];
-                        this.writeIndex++;
+                    // Bulk copy using set() - much faster than per-sample loop
+                    const writePos = this.writeIndex % this.bufferSize;
+                    const availableSpace = this.bufferSize - writePos;
+                    if (data.length <= availableSpace) {
+                        this.buffer.set(data, writePos);
+                    } else {
+                        // Handle wrap-around
+                        this.buffer.set(data.subarray(0, availableSpace), writePos);
+                        this.buffer.set(data.subarray(availableSpace), 0);
                     }
+                    this.writeIndex += data.length;
                 }
             }
         };
