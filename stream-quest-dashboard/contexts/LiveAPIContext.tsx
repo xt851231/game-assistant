@@ -135,8 +135,8 @@ export const LiveAPIProvider: React.FC<{ children: ReactNode }> = ({ children })
                 enableVAD: config.clientVAD,
                 silenceDuration: config.silenceDuration,
                 prefixPadding: config.prefixPadding,
-                startSpeechSensitivity: config.startSpeechSensitivity === 'default' ? 'START_SENSITIVITY_UNSPECIFIED' : config.startSpeechSensitivity === 'high' ? 'START_SENSITIVITY_HIGH' : 'START_SENSITIVITY_LOW',
-                endSpeechSensitivity: config.endSpeechSensitivity === 'default' ? 'END_SENSITIVITY_UNSPECIFIED' : config.endSpeechSensitivity === 'high' ? 'END_SENSITIVITY_HIGH' : 'END_SENSITIVITY_LOW',
+                startSpeechSensitivity: config.startSpeechSensitivity === 'default' ? 'START_SENSITIVITY_UNSPECIFIED' : config.startSpeechSensitivity === 'high' ? 'START_SENSITIVITY_HIGH' : config.startSpeechSensitivity === 'medium' ? 'START_SENSITIVITY_MEDIUM' : 'START_SENSITIVITY_LOW',
+                endSpeechSensitivity: config.endSpeechSensitivity === 'default' ? 'END_SENSITIVITY_UNSPECIFIED' : config.endSpeechSensitivity === 'high' ? 'END_SENSITIVITY_HIGH' : config.endSpeechSensitivity === 'medium' ? 'END_SENSITIVITY_MEDIUM' : 'END_SENSITIVITY_LOW',
             });
 
             clientRef.current.on('content', handleMessage);

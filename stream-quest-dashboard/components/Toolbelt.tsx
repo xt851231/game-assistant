@@ -16,23 +16,23 @@ const SIZES = [2, 4, 8, 12];
 
 const Toolbelt: React.FC<ToolbeltProps> = ({ tool, setTool, color, setColor, brushSize, setBrushSize, onClear }) => {
     return (
-        <div className="mt-4 flex items-center gap-4 bg-[#0f1520] border-2 border-[#1e293b] p-3 rounded shadow-lg h-[62px]">
+        <section aria-label="Toolbelt" data-component="Toolbelt" className="mt-4 flex items-center gap-4 bg-[#0f1520] border-2 border-[#1e293b] p-3 rounded shadow-lg h-[62px]">
             <div className="text-[8px] text-gray-500 font-pixel mr-2">TOOLS</div>
-            
+
             <div className="flex gap-2 mr-6 border-r-2 border-gray-600 pr-6 items-center">
-                <button 
+                <button
                     onClick={() => setTool('pen')}
                     className={`group relative size-8 rounded flex items-center justify-center transition-transform hover:scale-105 ${tool === 'pen' ? 'bg-[#2b6cee] border-2 border-[#ffd700]' : 'bg-[#1e293b] border-2 border-gray-600'}`}
                 >
                     <Pen size={14} className={tool === 'pen' ? 'text-white' : 'text-gray-400'} />
                 </button>
-                <button 
+                <button
                     onClick={() => setTool('eraser')}
                     className={`group relative size-8 rounded flex items-center justify-center transition-transform hover:scale-105 ${tool === 'eraser' ? 'bg-[#2b6cee] border-2 border-[#ffd700]' : 'bg-[#1e293b] border-2 border-gray-600'}`}
                 >
                     <Eraser size={14} className={tool === 'eraser' ? 'text-white' : 'text-gray-400'} />
                 </button>
-                 <button 
+                <button
                     onClick={onClear}
                     className="group relative size-8 bg-[#1e293b] border-2 border-gray-600 hover:border-red-500 rounded flex items-center justify-center hover:scale-105 transition-transform"
                     title="Clear Canvas"
@@ -42,15 +42,15 @@ const Toolbelt: React.FC<ToolbeltProps> = ({ tool, setTool, color, setColor, bru
             </div>
 
             <div className="flex gap-3 items-center border-r-2 border-gray-600 pr-6 mr-6">
-                 <div className="text-[8px] text-gray-500 font-pixel mr-1">SIZE</div>
-                 {SIZES.map(size => (
-                     <button
+                <div className="text-[8px] text-gray-500 font-pixel mr-1">SIZE</div>
+                {SIZES.map(size => (
+                    <button
                         key={size}
                         onClick={() => setBrushSize(size)}
                         className={`rounded-full bg-gray-400 hover:bg-white transition-all ${brushSize === size ? 'bg-white ring-2 ring-[#ffd700]' : ''}`}
                         style={{ width: Math.max(8, size * 1.5), height: Math.max(8, size * 1.5) }}
-                     />
-                 ))}
+                    />
+                ))}
             </div>
 
             <div className="flex gap-3 items-center">
@@ -64,7 +64,7 @@ const Toolbelt: React.FC<ToolbeltProps> = ({ tool, setTool, color, setColor, bru
                     />
                 ))}
             </div>
-        </div>
+        </section>
     );
 };
 

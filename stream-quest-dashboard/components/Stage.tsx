@@ -122,7 +122,7 @@ const Stage: React.FC<StageProps> = ({ tool, color, brushSize, onClear, videoStr
     }, []);
 
     return (
-        <div ref={containerRef} className="flex-1 relative rpg-window rpg-window-gold overflow-hidden shadow-2xl flex flex-col justify-center mb-0 group">
+        <div ref={containerRef} data-component="Stage" className="flex-1 relative rpg-window rpg-window-gold overflow-hidden shadow-2xl flex flex-col justify-center mb-0 group">
             {/* Decorative Corners */}
             <div className="absolute top-0 left-0 size-6 border-t-4 border-l-4 border-[#ffd700] z-20 pointer-events-none"></div>
             <div className="absolute top-0 right-0 size-6 border-t-4 border-r-4 border-[#ffd700] z-20 pointer-events-none"></div>

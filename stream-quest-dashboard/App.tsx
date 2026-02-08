@@ -145,10 +145,11 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="aspect-[16/9] w-full max-w-[100vw] max-h-[100vh] bg-[#111722] overflow-hidden flex flex-col border-4 border-[#1e293b] relative shadow-2xl mx-auto my-auto">
+        <div data-component="App" className="aspect-[16/9] w-full max-w-[100vw] max-h-[100vh] bg-[#111722] overflow-hidden flex flex-col border-4 border-[#1e293b] relative shadow-2xl mx-auto my-auto">
 
             {/* Header with Background Image */}
             <header
+                data-component="AppHeader"
                 className="h-[8%] shrink-0 z-40 px-4 py-1 bg-[#0a0f16] border-b-4 border-[#2b6cee] flex items-center justify-between shadow-lg relative bg-cover bg-center"
                 style={{ backgroundImage: 'linear-gradient(to bottom, rgba(10, 15, 22, 0.8), rgba(10, 15, 22, 0.9))' }}
             >
@@ -203,7 +204,7 @@ const App: React.FC = () => {
             >
 
                 {/* Workspace Panel */}
-                <main className="flex-1 flex flex-col min-w-0 bg-[#05080c]/80 backdrop-blur-sm rounded-xl border-2 border-[#2b6cee] shadow-2xl relative overflow-hidden transition-all duration-500">
+                <main data-component="AppMain" className="flex-1 flex flex-col min-w-0 bg-[#05080c]/80 backdrop-blur-sm rounded-xl border-2 border-[#2b6cee] shadow-2xl relative overflow-hidden transition-all duration-500">
 
                     {/* Inner Container */}
                     <div className="flex-1 flex flex-col p-4 overflow-hidden">
@@ -307,6 +308,7 @@ const App: React.FC = () => {
 
                 {/* Sidebar Container with Transition */}
                 <div
+                    data-component="SidebarWrapper"
                     className={`flex flex-col shrink-0 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isChatOpen
                         ? 'w-[22%] opacity-100 ml-6 translate-x-0'
                         : 'w-0 opacity-0 ml-0 translate-x-10'

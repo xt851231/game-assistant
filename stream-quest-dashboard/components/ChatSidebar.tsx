@@ -33,7 +33,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ messages, onSendMessage, onCl
     };
 
     return (
-        <aside className="w-full h-full bg-[#0c1219] border-2 border-[#2b6cee] rounded-xl flex flex-col z-10 shadow-lg overflow-hidden relative">
+        <aside data-component="ChatSidebar" className="w-full h-full bg-[#0c1219] border-2 border-[#2b6cee] rounded-xl flex flex-col z-10 shadow-lg overflow-hidden relative">
             {/* Header */}
             <div className="p-3 bg-[#162032] border-b-2 border-[#1e293b] flex justify-between items-center shrink-0">
                 <h2 className="font-pixel text-[9px] text-[#ffd700] tracking-widest">PARTY COMMS</h2>

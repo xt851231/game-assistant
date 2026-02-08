@@ -1,5 +1,5 @@
 export type Provider = 'gemini-live-websocket' | 'gemini-flash-rest';
-export type VadSensitivity = 'high' | 'low' | 'default';
+export type VadSensitivity = 'high' | 'medium' | 'low' | 'default';
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 export interface Persona {

@@ -17,7 +17,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     temperature: 0.7,
     silenceDuration: 500,
     clientVAD: true,
-    prefixPadding: 500,
+    prefixPadding: 300,
     alertBox: true,
     cssStyle: false,
 };

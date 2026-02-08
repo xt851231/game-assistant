@@ -20,7 +20,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
     };
 
     return (
-        <div className="absolute top-14 right-0 z-50 w-[480px] rpg-window shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+        <div role="dialog" data-component="ConfigurationMenu" className="absolute top-14 right-0 z-50 w-[480px] rpg-window shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
             {/* Header Tabs */}
             <div className="flex border-b-2 border-white bg-blue-900">
                 <button
@@ -95,7 +95,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('proactiveAudio', !config.proactiveAudio)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.proactiveAudio ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.proactiveAudio ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.proactiveAudio ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             <div className="flex items-center justify-between bg-[#162032] p-2 rounded border border-gray-700">
@@ -104,7 +104,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('affectiveDialog', !config.affectiveDialog)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.affectiveDialog ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.affectiveDialog ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.affectiveDialog ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             <div className="flex items-center justify-between bg-[#162032] p-2 rounded border border-gray-700">
@@ -113,7 +113,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('inputTranscription', !config.inputTranscription)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.inputTranscription ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.inputTranscription ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.inputTranscription ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             <div className="flex items-center justify-between bg-[#162032] p-2 rounded border border-gray-700">
@@ -122,7 +122,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('outputTranscription', !config.outputTranscription)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.outputTranscription ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.outputTranscription ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.outputTranscription ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             <div className="flex items-center justify-between bg-[#162032] p-2 rounded border border-gray-700 col-span-2">
@@ -131,7 +131,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('googleGrounding', !config.googleGrounding)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.googleGrounding ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.googleGrounding ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.googleGrounding ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                         </section>
@@ -150,6 +150,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                 >
                                     <option value="default">Default</option>
                                     <option value="high">High</option>
+                                    <option value="medium">Medium</option>
                                     <option value="low">Low</option>
                                 </select>
                             </div>
@@ -162,6 +163,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                 >
                                     <option value="default">Default</option>
                                     <option value="high">High</option>
+                                    <option value="medium">Medium</option>
                                     <option value="low">Low</option>
                                 </select>
                             </div>
@@ -178,7 +180,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                     onClick={() => handleChange('clientVAD', !config.clientVAD)}
                                     className={`w-8 h-4 rounded-full relative transition-colors ${config.clientVAD ? 'bg-green-500' : 'bg-gray-600'}`}
                                 >
-                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.clientVAD ? 'left-4.5 translate-x-0' : 'left-0.5'}`} />
+                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${config.clientVAD ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                             <div>
@@ -188,7 +190,7 @@ const ConfigurationMenu: React.FC<ConfigurationMenuProps> = ({ isOpen, config, o
                                 </div>
                                 <input
                                     type="range"
-                                    min="100" max="2000" step="100"
+                                    min="0" max="2000" step="100"
                                     value={config.silenceDuration}
                                     onChange={(e) => handleChange('silenceDuration', parseInt(e.target.value))}
                                     className="w-full h-2 rounded-lg appearance-none cursor-pointer"
