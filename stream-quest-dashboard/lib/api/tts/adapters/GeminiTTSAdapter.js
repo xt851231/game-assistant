@@ -1,5 +1,6 @@
 import { TTSAdapter } from '../interfaces/TTSAdapter';
 import { GoogleGenAI } from "@google/genai";
+import { SpeechAudioContext } from '../../../utils/SpeechAudioContext.js';
 
 /**
  * TTS Adapter using Gemini 2.5 Flash TTS model
@@ -10,6 +11,7 @@ export class GeminiTTSAdapter extends TTSAdapter {
         this.client = new GoogleGenAI({ apiKey: config.apiKey });
         this.modelId = "gemini-2.5-flash-preview-tts";
         this.audioCtx = null;
+        this.gainNode = null;
         this.isPlayingAudio = false;
         this.currentSource = null;
         this.queue = [];
@@ -135,15 +137,13 @@ export class GeminiTTSAdapter extends TTSAdapter {
         console.log(`🔊 GeminiTTS: playAudio() called, mimeType: ${mimeType}`);
 
         if (!this.audioCtx) {
-            // Use 24kHz sample rate to match Gemini TTS output
-            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-            console.log(`🔊 GeminiTTS: Created AudioContext, state: ${this.audioCtx.state}, sampleRate: ${this.audioCtx.sampleRate}`);
+            // Use shared SpeechAudioContext
+            this.audioCtx = await SpeechAudioContext.getContext();
+            this.gainNode = await SpeechAudioContext.getGainNode();
+            console.log(`🔊 GeminiTTS: Using shared SpeechAudioContext, sampleRate: ${this.audioCtx.sampleRate}`);
         }
 
-        if (this.audioCtx.state === 'suspended') {
-            console.log(`🔊 GeminiTTS: Resuming suspended AudioContext...`);
-            await this.audioCtx.resume();
-        }
+        await SpeechAudioContext.resume();
 
         // Convert base64 to ArrayBuffer
         console.log(`🔊 GeminiTTS: Decoding base64 audio (${base64String.length} chars)...`);
@@ -183,7 +183,8 @@ export class GeminiTTSAdapter extends TTSAdapter {
             return new Promise((resolve) => {
                 const source = this.audioCtx.createBufferSource();
                 source.buffer = audioBuffer;
-                source.connect(this.audioCtx.destination);
+                // Route through shared gain node for volume control
+                source.connect(this.gainNode);
 
                 this.currentSource = source;
                 this.isPlayingAudio = true;

@@ -1,4 +1,5 @@
 import { TTSAdapter } from '../interfaces/TTSAdapter';
+import { SpeechAudioContext } from '../../../utils/SpeechAudioContext.js';
 
 /**
  * TTS Adapter using Browser's built-in Window.speechSynthesis
@@ -16,6 +17,9 @@ export class BrowserTTSAdapter extends TTSAdapter {
         return new Promise((resolve, reject) => {
             console.log(`🔊 BrowserTTS: Speaking "${text.substring(0, 20)}..." at ${Date.now()}`);
             const utterance = new SpeechSynthesisUtterance(text);
+
+            // Apply volume from shared SpeechAudioContext
+            utterance.volume = SpeechAudioContext.getVolume();
 
             // Set voice if configured
             if (this.voice) {

@@ -523,15 +523,16 @@ export class ScreenCapture extends BaseVideoCapture {
 
 /**
  * Audio Player - Plays audio responses from Gemini
+ * Uses shared SpeechAudioContext for unified volume control
  */
+import { SpeechAudioContext } from './SpeechAudioContext.js';
+
 export class AudioPlayer {
   constructor() {
     this.audioContext = null;
     this.workletNode = null;
-    this.gainNode = null;
+    this.gainNode = null; // Reference to shared gain node
     this.isInitialized = false;
-    this.volume = 1.0;
-    this.sampleRate = 24000; // Gemini outputs at 24kHz
   }
 
   /**
@@ -541,11 +542,9 @@ export class AudioPlayer {
     if (this.isInitialized) return;
 
     try {
-      // Create audio context at 24kHz to match Gemini
-      this.audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)({
-          sampleRate: this.sampleRate,
-        });
+      // Get shared audio context
+      this.audioContext = await SpeechAudioContext.getContext();
+      this.gainNode = await SpeechAudioContext.getGainNode();
 
       // Load the audio worklet from external file
       await this.audioContext.audioWorklet.addModule(
@@ -558,16 +557,11 @@ export class AudioPlayer {
         "pcm-processor"
       );
 
-      // Create gain node for volume control
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = this.volume;
-
-      // Connect nodes
+      // Connect worklet -> shared gain node (which connects to destination)
       this.workletNode.connect(this.gainNode);
-      this.gainNode.connect(this.audioContext.destination);
 
       this.isInitialized = true;
-      console.log("🔊 Audio player initialized");
+      console.log("🔊 Audio player initialized (using shared SpeechAudioContext)");
     } catch (error) {
       console.error("Failed to initialize audio player:", error);
       throw error;
@@ -585,10 +579,7 @@ export class AudioPlayer {
 
     try {
       // Resume audio context if suspended
-      if (this.audioContext.state === "suspended") {
-        console.log('🔊 Resuming suspended audio context...');
-        await this.audioContext.resume();
-      }
+      await SpeechAudioContext.resume();
 
       // Convert base64 to Float32Array
       const binaryString = atob(base64Audio);
@@ -603,8 +594,6 @@ export class AudioPlayer {
       for (let i = 0; i < inputArray.length; i++) {
         float32Data[i] = inputArray[i] / 32768;
       }
-
-      // console.log(`🔊 Sending ${float32Data.length} samples to worklet`);
 
       // Send to worklet for playback
       this.workletNode.port.postMessage(float32Data);
@@ -624,22 +613,13 @@ export class AudioPlayer {
   }
 
   /**
-   * Set volume (0.0 to 1.0)
-   */
-  setVolume(volume) {
-    this.volume = Math.max(0, Math.min(1, volume));
-    if (this.gainNode) {
-      this.gainNode.gain.value = this.volume;
-    }
-  }
-
-  /**
    * Clean up resources
+   * Note: We don't close the shared AudioContext, just disconnect our node
    */
   destroy() {
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
+    if (this.workletNode) {
+      this.workletNode.disconnect();
+      this.workletNode = null;
     }
     this.isInitialized = false;
   }
