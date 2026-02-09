@@ -309,7 +309,7 @@ const App: React.FC = () => {
                 {/* Sidebar Container with Transition */}
                 <div
                     data-component="SidebarWrapper"
-                    className={`flex flex-col shrink-0 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isChatOpen
+                    className={`flex flex-col shrink-0 h-full transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isChatOpen
                         ? 'w-[22%] opacity-100 ml-6 translate-x-0'
                         : 'w-0 opacity-0 ml-0 translate-x-10'
                         }`}

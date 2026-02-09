@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message } from '../types';
-import { Settings, X, Send, Crown, Bot, Mic } from 'lucide-react';
+import { X, Send, Crown, Bot } from 'lucide-react';
 
 interface ChatSidebarProps {
     messages: Message[];
@@ -14,15 +14,50 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ messages, onSendMessage, onCl
     const endRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
 
+    // Animation State Machine: 'hidden' | 'active' | 'static' | 'off-anim'
+    const [visualState, setVisualState] = useState<'hidden' | 'active' | 'static' | 'off-anim'>('hidden');
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (videoStream) {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+            setVisualState('active');
+        } else {
+            // Sequence: active -> static (0.5s) -> off-anim (0.5s) -> hidden
+            if (visualState === 'active') {
+                setVisualState('static');
+                timerRef.current = setTimeout(() => {
+                    setVisualState('off-anim');
+                    timerRef.current = setTimeout(() => {
+                        setVisualState('hidden');
+                        timerRef.current = null;
+                    }, 500); // Duration of crt-turn-off
+                }, 500); // Duration of static noise
+            } else if (visualState !== 'static' && visualState !== 'off-anim') {
+                // Initial load or quick toggle
+                setVisualState('hidden');
+            }
+        }
+
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+        };
+    }, [videoStream]);
+
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     useEffect(() => {
-        if (videoRef.current) {
+        if (videoRef.current && videoStream) {
             videoRef.current.srcObject = videoStream;
         }
-    }, [videoStream]);
+    }, [videoStream, visualState]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,7 +68,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ messages, onSendMessage, onCl
     };
 
     return (
-        <aside data-component="ChatSidebar" className="w-full h-full bg-[#0c1219] border-2 border-[#2b6cee] rounded-xl flex flex-col z-10 shadow-lg overflow-hidden relative">
+        <aside data-component="ChatSidebar" className="w-full h-full bg-[#0c1219] border-2 border-[#2b6cee] rounded-xl flex flex-col z-10 shadow-lg overflow-hidden relative min-h-0">
             {/* Header */}
             <div className="p-3 bg-[#162032] border-b-2 border-[#1e293b] flex justify-between items-center shrink-0">
                 <h2 className="font-pixel text-[9px] text-[#ffd700] tracking-widest">PARTY COMMS</h2>
@@ -49,7 +84,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ messages, onSendMessage, onCl
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-[#111722] relative scroll-smooth">
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-[#111722] relative scroll-smooth min-h-0">
                 {/* Grid Pattern Background */}
                 <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)', backgroundSize: '15px 15px' }}></div>
 
@@ -117,21 +152,30 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ messages, onSendMessage, onCl
             </div>
 
             {/* Secondary Vision Port (PIP) */}
-            <div className="p-4 bg-[#0c1219] shrink-0 border-t border-[#1e293b]">
-                <div className="w-full aspect-video bg-black relative rounded-lg border-2 border-[#232f48] overflow-hidden group shadow-inner flex items-center justify-center">
-                    {videoStream ? (
+            {visualState !== 'hidden' && (
+                <div className={`secondary-screen-container p-4 bg-[#0c1219] shrink-0 border-t border-[#1e293b]`}>
+                    <div className={`w-full aspect-video bg-black relative rounded-lg border-2 border-[#232f48] overflow-hidden group shadow-inner flex items-center justify-center ${visualState === 'active' ? 'animate-crt-on' : visualState === 'off-anim' ? 'animate-crt-off' : ''}`}>
+                        {/* Video Content */}
                         <video
                             ref={videoRef}
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-full object-cover"
+                            className={`w-full h-full object-cover ${!videoStream ? 'invisible' : ''}`}
                         />
-                    ) : (
-                        <span className="text-[10px] text-gray-600 font-pixel">NO SIGNAL</span>
-                    )}
+
+                        {/* NO SIGNAL Placeholder */}
+                        {!videoStream && visualState !== 'static' && visualState !== 'off-anim' && (
+                            <span className="text-[10px] text-gray-600 font-pixel">NO SIGNAL</span>
+                        )}
+
+                        {/* Static Noise Overlay */}
+                        {(visualState === 'static' || visualState === 'off-anim') && (
+                            <div className="animate-static-noise"></div>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
         </aside>
     );
 };
