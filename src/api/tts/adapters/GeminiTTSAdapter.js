@@ -140,9 +140,12 @@ export class GeminiTTSAdapter extends TTSAdapter {
             console.log(`🔊 GeminiTTS: Created AudioContext, state: ${this.audioCtx.state}, sampleRate: ${this.audioCtx.sampleRate}`);
         }
 
-        if (this.audioCtx.state === 'suspended') {
+        // Use a local reference to ensure AudioContext remains accessible even if stop() is called
+        const ctx = this.audioCtx;
+
+        if (ctx.state === 'suspended') {
             console.log(`🔊 GeminiTTS: Resuming suspended AudioContext...`);
-            await this.audioCtx.resume();
+            await ctx.resume();
         }
 
         // Convert base64 to ArrayBuffer
@@ -165,25 +168,25 @@ export class GeminiTTSAdapter extends TTSAdapter {
             if (isPCM || !mimeType || mimeType === 'audio/pcm') {
                 // Raw PCM: Convert 16-bit PCM to Float32
                 console.log(`🔊 GeminiTTS: Converting raw PCM to AudioBuffer...`);
-                audioBuffer = this.pcmToAudioBuffer(bytes);
+                audioBuffer = this.pcmToAudioBuffer(bytes, ctx);
             } else {
                 // Try standard decode for other formats
                 console.log(`🔊 GeminiTTS: Trying decodeAudioData for ${mimeType}...`);
                 try {
-                    audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer.slice(0));
+                    audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
                 } catch (decodeError) {
                     // Fallback: assume it's raw PCM
                     console.warn(`🔊 GeminiTTS: decodeAudioData failed, falling back to PCM conversion`);
-                    audioBuffer = this.pcmToAudioBuffer(bytes);
+                    audioBuffer = this.pcmToAudioBuffer(bytes, ctx);
                 }
             }
 
             console.log(`🔊 GeminiTTS: Audio ready! Duration: ${audioBuffer.duration}s, channels: ${audioBuffer.numberOfChannels}, sampleRate: ${audioBuffer.sampleRate}`);
 
             return new Promise((resolve) => {
-                const source = this.audioCtx.createBufferSource();
+                const source = ctx.createBufferSource();
                 source.buffer = audioBuffer;
-                source.connect(this.audioCtx.destination);
+                source.connect(ctx.destination);
 
                 this.currentSource = source;
                 this.isPlayingAudio = true;
@@ -208,7 +211,7 @@ export class GeminiTTSAdapter extends TTSAdapter {
     /**
      * Convert 16-bit PCM bytes to AudioBuffer (24kHz mono)
      */
-    pcmToAudioBuffer(pcmBytes) {
+    pcmToAudioBuffer(pcmBytes, ctx) {
         // Interpret bytes as 16-bit signed integers (little-endian)
         const numSamples = pcmBytes.length / 2;
         const float32Data = new Float32Array(numSamples);
@@ -224,7 +227,7 @@ export class GeminiTTSAdapter extends TTSAdapter {
 
         // Create AudioBuffer (mono, 24kHz)
         const sampleRate = 24000;
-        const audioBuffer = this.audioCtx.createBuffer(1, numSamples, sampleRate);
+        const audioBuffer = (ctx || this.audioCtx).createBuffer(1, numSamples, sampleRate);
         audioBuffer.copyToChannel(float32Data, 0);
 
         return audioBuffer;
@@ -238,6 +241,10 @@ export class GeminiTTSAdapter extends TTSAdapter {
                 // Ignore if already stopped
             }
             this.currentSource = null;
+        }
+        if (this.audioCtx) {
+            this.audioCtx.close();
+            this.audioCtx = null;
         }
         this.isPlayingAudio = false;
         this.queue = [];
