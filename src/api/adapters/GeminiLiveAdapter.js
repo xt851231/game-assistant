@@ -2,7 +2,7 @@
  * Gemini Live Adapter
  * Implements ModelAdapter interface for Google Gemini Live API (WebSocket)
  */
-import { ModelAdapter } from '../interfaces/ModelAdapter';
+import { ModelAdapter } from '../interfaces/ModelAdapter.js';
 import { GoogleGenAI } from "@google/genai";
 
 // Response type constants (Internal to this adapter)
