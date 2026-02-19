@@ -193,8 +193,12 @@ export class GeminiFlashAdapter extends ModelAdapter {
 
         // Convert to base64
         let binary = '';
-        for (let i = 0; i < wavBytes.length; i++) {
-            binary += String.fromCharCode(wavBytes[i]);
+        const chunkSize = 0x8000; // 32KB chunks to avoid stack overflow
+        for (let i = 0; i < wavBytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(
+                null,
+                wavBytes.subarray(i, i + chunkSize)
+            );
         }
         return btoa(binary);
     }
